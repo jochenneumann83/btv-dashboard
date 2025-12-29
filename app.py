@@ -8,10 +8,8 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# --- KONFIGURATION CACHE (3 Minuten) ---
 cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache', 'CACHE_DEFAULT_TIMEOUT': 180})
 
-# --- TEAM KONFIGURATION ---
 TEAMS = {
     "mC-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424095", None, None],
     "wC1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", None, ["II", "2"]], 
@@ -24,9 +22,7 @@ TEAMS = {
     "wE-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424213", None, None]
 }
 
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-}
+HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
 
 def scrape_games(url, filter_include=None, filter_exclude=None):
     games = []
@@ -36,10 +32,7 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
         session = requests.Session()
         session.headers.update(HEADERS)
         response = session.get(url, timeout=10)
-        
-        if response.status_code != 200:
-            return [], []
-
+        if response.status_code != 200: return [], []
         soup = BeautifulSoup(response.text, 'html.parser')
         tables = soup.find_all('table', {'class': 'result-set'})
         
@@ -48,18 +41,12 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
             if "birkesdorf" not in name_lower and "btv" not in name_lower: return False
             if filter_include:
                 if isinstance(filter_include, list):
-                    match_any = False
-                    for item in filter_include:
-                        if item.lower() in name_lower: match_any = True
-                    if not match_any: return False
-                else:
-                    if filter_include.lower() not in name_lower: return False
+                    if not any(i.lower() in name_lower for i in filter_include): return False
+                elif filter_include.lower() not in name_lower: return False
             if filter_exclude:
                 if isinstance(filter_exclude, list):
-                    for item in filter_exclude:
-                        if item.lower() in name_lower: return False
-                else:
-                    if filter_exclude.lower() in name_lower: return False
+                    if any(e.lower() in name_lower for e in filter_exclude): return False
+                elif filter_exclude.lower() in name_lower: return False
             return True
 
         for table in tables:
@@ -67,255 +54,119 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
             header_text = "".join(headers)
             rows = table.find_all('tr')
 
-            # --- A: TABELLE ---
             if "rang" in header_text and "punkte" in header_text:
-                is_long_format = "tore" in header_text or "diff" in header_text
+                is_long = "tore" in header_text or "diff" in header_text
                 for row in rows:
                     cols = row.find_all('td')
                     if len(cols) >= 6:
                         try:
-                            rang = cols[0].get_text(strip=True)
-                            col_offset = 0
-                            if not rang.isdigit():
-                                if len(cols) > 1 and cols[1].get_text(strip=True).isdigit():
-                                    rang = cols[1].get_text(strip=True)
-                                    col_offset = 1
+                            r_txt = cols[0].get_text(strip=True)
+                            off = 1 if not r_txt.isdigit() and len(cols) > 1 and cols[1].get_text(strip=True).isdigit() else 0
+                            rang = cols[off].get_text(strip=True)
                             if not rang.isdigit(): continue
-
-                            possible_team_col = col_offset + 1
-                            mannschaft = "Unbekannt"
-                            if len(cols) > possible_team_col + 1:
-                                text_a = cols[possible_team_col].get_text(strip=True)
-                                text_b = cols[possible_team_col + 1].get_text(strip=True)
-                                if len(text_b) > len(text_a) and len(text_b) > 3:
-                                    mannschaft = text_b
-                                else:
-                                    mannschaft = text_a
+                            mannschaft = cols[off+2].get_text(strip=True) if len(cols[off+1].get_text(strip=True)) < 3 else cols[off+1].get_text(strip=True)
+                            if is_long:
+                                p, d, t, n, u, s, sp = cols[-1].text, cols[-2].text, cols[-3].text, cols[-4].text, cols[-5].text, cols[-6].text, cols[-7].text
                             else:
-                                mannschaft = cols[possible_team_col].get_text(strip=True)
-
-                            if is_long_format:
-                                punkte = cols[-1].get_text(strip=True)
-                                diff = cols[-2].get_text(strip=True)
-                                tore_val = cols[-3].get_text(strip=True)
-                                n_val = cols[-4].get_text(strip=True)
-                                u_val = cols[-5].get_text(strip=True)
-                                s_val = cols[-6].get_text(strip=True)
-                                spiele = cols[-7].get_text(strip=True)
-                            else:
-                                punkte = cols[-1].get_text(strip=True)
-                                n_val = cols[-2].get_text(strip=True)
-                                u_val = cols[-3].get_text(strip=True)
-                                s_val = cols[-4].get_text(strip=True)
-                                spiele = cols[-5].get_text(strip=True)
-                                diff = "-"
-                                tore_val = "-"
-
-                            is_own = check_team_match(mannschaft)
-                            league_table.append({
-                                'rang': rang, 'mannschaft': mannschaft, 'spiele': spiele,
-                                's': s_val, 'u': u_val, 'n': n_val, 'tore': tore_val,
-                                'diff': diff, 'punkte': punkte, 'is_own': is_own
-                            })
-                        except Exception: continue
+                                p, n, u, s, sp = cols[-1].text, cols[-2].text, cols[-3].text, cols[-4].text, cols[-5].text
+                                d, t = "-", "-"
+                            league_table.append({'rang': rang, 'mannschaft': mannschaft, 'spiele': sp, 's': s, 'u': u, 'n': n, 'tore': t, 'diff': d, 'punkte': p, 'is_own': check_team_match(mannschaft)})
+                        except: continue
                 continue 
 
-            # --- B: SPIELPLAN ---
             current_date = "Unbekannt"
             for row in rows:
                 cols = row.find_all('td')
                 if not cols: continue
+                row_texts = [c.get_text(strip=True) for c in cols]
+                
+                # Datum finden
+                date_match = re.search(r'(\d{1,2}\.\d{1,2}\.\d{4})', "".join(row_texts[:4]))
+                if date_match: current_date = date_match.group(1)
 
-                time_index = -1
-                row_text_list = [c.get_text(strip=True) for c in cols]
-                
-                # Datum Parsing
-                if len(cols) > 2 and "." in row_text_list[1]:
-                     if re.search(r'\d{1,2}\.\d{1,2}\.', row_text_list[1]):
-                        raw_date = row_text_list[1]
-                        match = re.search(r'(\d{1,2}\.\d{1,2}\.\d{4})', raw_date)
-                        if match: current_date = match.group(1)
-                        else: current_date = raw_date
-                
-                for i, txt in enumerate(row_text_list):
-                    if i > 5: break 
+                # Zeitanker finden
+                t_idx = -1
+                for i, txt in enumerate(row_texts[:6]):
                     if re.search(r'\d{1,2}:\d{2}', txt):
-                        time_index = i
+                        t_idx = i
+                        break
+                if t_idx == -1: continue
+
+                # Team finden (DYNAMISCH & Derby-Safe)
+                # Wir suchen alle Indizes, die "Birkesdorf" enthalten
+                potential_indices = [i for i, txt in enumerate(row_texts) if check_team_match(txt)]
+                if not potential_indices: continue
+                
+                # Wir nehmen den Index, der am weitesten links steht, aber nach der Zeit kommt
+                my_idx = potential_indices[0]
+                
+                # Checke ob Ergebnis existiert
+                score_idx = -1
+                for i in range(my_idx, len(row_texts)):
+                    if re.search(r'\d+:\d+', row_texts[i]):
+                        score_idx = i
                         break
                 
-                if time_index == -1: continue
-                zeit = row_text_list[time_index]
-                
-                my_team_idx = -1
-                for i in range(time_index + 1, len(cols)):
-                    txt = row_text_list[i]
-                    if check_team_match(txt):
-                        my_team_idx = i
-                        break
-                
-                if my_team_idx == -1: continue 
-
-                heim = "???"
-                gast = "???"
-                tore = "-"
-                
-                # --- LOGIK FÜR ERGEBNIS & HEIM/GAST ---
-                has_next = (my_team_idx + 1 < len(cols))
-                next_val = row_text_list[my_team_idx + 1] if has_next else ""
-                
-                # Ist das nächste Feld ein Ergebnis (z.B. "24:22")?
-                is_score = re.search(r'\d+:\d+', next_val) or "abges" in next_val.lower()
-                
-                if is_score:
-                    # Fall 1: Spiel VORBEI (Es gibt ein Ergebnis)
-                    # Aufbau: [Gegner] [ICH] [Ergebnis]  <- Ich bin Gast
-                    # Oder:   [ICH] [Gegner] [Ergebnis]  <- Ich bin Heim
-                    # Wir prüfen, was links steht.
-                    
-                    # Da my_team_idx unsere Position ist:
-                    # Wenn next_val das Ergebnis ist, ist rechts vom Gegner das Ergebnis.
-                    # Das bedeutet: [Pos X] [Pos X+1] [Pos X+2 = Ergebnis]
-                    
-                    # Moment, einfacher:
-                    # nuLiga Standard: Heim | Gast | Tore
-                    # Wenn ich an Pos X bin und Pos X+1 ist das Ergebnis -> Ich bin GAST (X-1 war Heim)
-                    # Wenn ich an Pos X bin und Pos X+1 ist Gegner und Pos X+2 ist Ergebnis -> Ich bin HEIM
-                    
-                    if re.search(r'\d+:\d+', next_val) or "abges" in next_val.lower():
-                        # Wenn direkt neben mir das Ergebnis steht, war ich Gast
-                        gast = row_text_list[my_team_idx]
-                        heim = row_text_list[my_team_idx - 1]
-                        tore = next_val
+                if score_idx != -1: # SPIEL VORBEI
+                    tore = row_texts[score_idx]
+                    # Wenn ich direkt vor dem Ergebnis stehe, bin ich GAST (nuLiga: Heim | Gast | Tore)
+                    # ABER: Manchmal ist eine Spalte dazwischen. Wir prüfen den Nachbarn.
+                    if score_idx == my_idx + 1:
+                        gast, heim = row_texts[my_idx], row_texts[my_idx-1]
+                        we_home = False
                     else:
-                        # Fallback (Sollte durch Logik oben abgedeckt sein, aber sicher ist sicher)
-                        heim = row_text_list[my_team_idx]
-                        gast = next_val
-                        if my_team_idx + 2 < len(cols):
-                            tore = row_text_list[my_team_idx + 2]
-                
-                else:
-                    # Fall 2: ZUKUNFT (Kein Ergebnis)
-                    # Aufbau: Heim | Gast
-                    # Problem: Rechts ist oft leer oder "-" oder "v".
+                        heim, gast = row_texts[my_idx], row_texts[my_idx+1]
+                        we_home = True
+                else: # ZUKUNFT
+                    tore = "-"
+                    # Suche den anderen Teamnamen in der Nähe (Heim | Gast)
+                    # Wir schauen ob links oder rechts von uns ein Team steht
+                    left_n = row_texts[my_idx-1] if my_idx > 0 else ""
+                    right_n = row_texts[my_idx+1] if my_idx+1 < len(row_texts) else ""
                     
-                    # Wir schauen uns die Nachbarn an:
-                    # Nachbar RECHTS (my_team_idx + 1)
-                    right_val = row_text_list[my_team_idx + 1] if my_team_idx + 1 < len(cols) else ""
-                    # Nachbar LINKS (my_team_idx - 1)
-                    left_val = row_text_list[my_team_idx - 1] if my_team_idx > 0 else ""
-                    
-                    # Ist Rechts ein Teamname? (Länger als 2, keine Uhrzeit, keine reine Zahl für Halle)
-                    right_is_team = len(right_val) > 2 and not re.search(r'\d{1,2}:\d{2}', right_val) and not right_val.isdigit()
-                    
-                    # Ist Links ein Teamname? (Länger als 2, keine Uhrzeit, keine reine Zahl für Halle)
-                    left_is_team = len(left_val) > 2 and not re.search(r'\d{1,2}:\d{2}', left_val) and not left_val.isdigit()
-
-                    if right_is_team:
-                        # Rechts steht wer -> Ich bin HEIM
-                        heim = row_text_list[my_team_idx]
-                        gast = right_val
-                    elif left_is_team:
-                        # Links steht wer -> Ich bin GAST
-                        heim = left_val
-                        gast = row_text_list[my_team_idx]
+                    if len(right_n) > 3 and not any(char.isdigit() for char in right_n[:2]):
+                        heim, gast, we_home = row_texts[my_idx], right_n, True
                     else:
-                        # Fallback (Passiert selten): Wir nehmen an wir sind Heim
-                        heim = row_text_list[my_team_idx]
-                        gast = right_val if right_val else "???"
+                        heim, gast, we_home = left_n, row_texts[my_idx], False
 
-                # PDF Link
-                pdf_link = None
-                for link in row.find_all('a', href=True):
-                    href = link['href'].lower()
-                    is_report = False
-                    if 'download' in href or 'pdf' in href or 'meeting' in href or 'nudokument' in href: is_report = True
-                    img = link.find('img')
-                    if img:
-                        if 'pdf' in img.get('alt','').lower() or 'pdf' in img.get('src','').lower(): is_report = True
-                    if is_report:
-                        pdf_link = urljoin(url, link['href'])
-                        break 
-                
-                we_are_home = check_team_match(heim)
+                pdf = None
+                for a in row.find_all('a', href=True):
+                    if any(x in a['href'].lower() for x in ['pdf', 'download', 'meeting', 'nudokument']):
+                        pdf = urljoin(url, a['href']); break
 
-                games.append({
-                    'datum': current_date, 'zeit': zeit, 'heim': heim, 'gast': gast,
-                    'tore': tore, 'pdf': pdf_link, 'we_are_home': we_are_home
-                })
+                games.append({'datum': current_date, 'zeit': row_texts[t_idx], 'heim': heim, 'gast': gast, 'tore': tore, 'pdf': pdf, 'we_are_home': we_home})
                 
     except Exception as e:
-        print(f"Scrape Fehler: {e}")
-        return [], []
-    
+        print(f"Fehler: {e}"); return [], []
     return games, league_table
 
 @app.route('/')
 @cache.cached(timeout=180)
 def index():
-    latest_results = []
-    today = datetime.now()
-    
-    for team_name, config in TEAMS.items():
-        url, include, exclude = config
-        games, _ = scrape_games(url, filter_include=include, filter_exclude=exclude)
-        
-        # 1. Letztes Spiel
-        played_games = [g for g in games if ":" in g.get('tore', '')]
-        last_game = played_games[-1] if played_games else None
-        
-        # 2. Nächstes Spiel
-        next_game = None
-        for g in games:
-            if ":" in g.get('tore', '') or "abges" in g.get('tore', '').lower():
-                continue
+    res = []; today = datetime.now().date()
+    for team, conf in TEAMS.items():
+        g, _ = scrape_games(conf[0], conf[1], conf[2])
+        played = [i for i in g if ":" in i['tore']]
+        last = played[-1] if played else None
+        nxt = next((i for i in g if ":" not in i['tore'] and "abge" not in i['tore'].lower() and (datetime.strptime(i['datum'], "%d.%m.%Y").date() >= today if "." in i['datum'] else False)), None)
+        status = None
+        if last and ":" in last['tore']:
             try:
-                g_date_str = g.get('datum', '')
-                if not g_date_str: continue
-                g_date = datetime.strptime(g_date_str, "%d.%m.%Y")
-                if g_date.date() >= today.date():
-                    next_game = g
-                    break
-            except Exception:
-                continue
-        
-        # 3. Ampel Status
-        traffic_light = None
-        if last_game and ":" in last_game['tore']:
-            try:
-                tore_str = last_game['tore'].strip()
-                t_heim, t_gast = map(int, tore_str.split(':'))
-                we_home = last_game['we_are_home']
-                if t_heim == t_gast: traffic_light = 'draw'
-                elif we_home: traffic_light = 'win' if t_heim > t_gast else 'loss'
-                else: traffic_light = 'win' if t_gast > t_heim else 'loss'
+                h, g_s = map(int, last['tore'].split(':'))
+                if h == g_s: status = 'draw'
+                else: status = 'win' if (h > g_s if last['we_are_home'] else g_s > h) else 'loss'
             except: pass
-
-        latest_results.append({
-            'team': team_name,
-            'game': last_game,
-            'next_game': next_game,
-            'status': traffic_light
-        })
-
-    # SORTIERUNG: Erst Name, dann Datum (Neuestes oben)
-    def get_last_game_date(item):
-        if item['game'] and item['game'].get('datum'):
-            try: return datetime.strptime(item['game']['datum'], "%d.%m.%Y")
-            except: return datetime.min 
-        return datetime.min
+        res.append({'team': team, 'game': last, 'next_game': nxt, 'status': status})
     
-    latest_results.sort(key=lambda x: x['team'])
-    latest_results.sort(key=get_last_game_date, reverse=True)
-
-    return render_template('index.html', latest_results=latest_results)
+    res.sort(key=lambda x: x['team'])
+    res.sort(key=lambda x: datetime.strptime(x['game']['datum'], "%d.%m.%Y") if x['game'] else datetime.min, reverse=True)
+    return render_template('index.html', latest_results=res)
 
 @app.route('/team/<team_name>')
 @cache.cached(timeout=180)
 def team_detail(team_name):
-    if team_name not in TEAMS: return "Team nicht gefunden", 404
-    url, include, exclude = TEAMS[team_name]
-    games, league_table = scrape_games(url, filter_include=include, filter_exclude=exclude)
-    return render_template('team.html', team_name=team_name, games=games, league_table=league_table)
+    c = TEAMS.get(team_name); g, t = scrape_games(c[0], c[1], c[2])
+    return render_template('team.html', team_name=team_name, games=g, league_table=t)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
