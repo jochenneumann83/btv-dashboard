@@ -8,21 +8,24 @@ app = Flask(__name__)
 
 # Konfiguration der Teams, URLs und Filter
 # Format: "TeamName": ["URL", "Include-Filter", "Exclude-Filter"]
-# "Include": Dieser Begriff MUSS im Namen vorkommen (z.B. "II" für die Zweite).
+# "Include": Dieser Begriff MUSS im Namen vorkommen (z.B. "II").
 # "Exclude": Dieser Begriff darf NICHT vorkommen (z.B. "II" bei der Ersten).
-# Hinweis: "Birkesdorf" oder "BTV" wird vom Code AUTOMATISCH immer vorausgesetzt!
+# "Birkesdorf" oder "BTV" wird automatisch immer vorausgesetzt.
 
 TEAMS = {
     "mC-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424095", None, None],
     
-    # wC: Beide in einer Liga -> Wir filtern nur nach "II"
-    "wC1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", None, "II"], # Muss BTV sein, aber OHNE "II"
-    "wC2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", "II", None], # Muss BTV sein UND "II" haben
+    # wC1: Darf kein "II" haben
+    "wC1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", None, "II"], 
+    # wC2: Muss "II" haben
+    "wC2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", "II", None],
     
     "mD-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424301", None, None],
     
-    # wD: Dasselbe Spiel wie bei der C-Jugend
+    # wD1: Darf kein "II" haben (somit wird die wD2 ausgeblendet, außer es ist ein Derby)
     "wD1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=425685", None, "II"], 
+    
+    # wD2: Muss "II" haben (findet "TV Birkesdorf II")
     "wD2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=425685", "II", None], 
     
     "mE1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424179", None, None],
@@ -49,27 +52,32 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
         soup = BeautifulSoup(response.text, 'html.parser')
         tables = soup.find_all('table', {'class': 'result-set'})
         
-        # --- VERBESSERTE LOGIK ---
+        # --- TEAM CHECK FUNKTION ---
         def check_team_match(name):
             name_lower = name.lower()
             
-            # 1. BASIS-CHECK: Ist es überhaupt unser Verein?
-            # Wir prüfen IMMER erst auf "Birkesdorf" oder "BTV".
-            # Das verhindert, dass wir "HC Weiden II" finden, nur weil wir nach "II" suchen.
+            # 1. Ist es überhaupt unser Verein?
             if "birkesdorf" not in name_lower and "btv" not in name_lower:
                 return False
             
-            # 2. FEIN-FILTER (Include)
-            # z.B. Suche nach "II" für die 2. Mannschaft
+            # 2. Include Check (Muss enthalten sein, z.B. "II")
             if filter_include:
-                if filter_include.lower() not in name_lower: 
-                    return False
+                # Wir unterstützen String oder Liste
+                if isinstance(filter_include, list):
+                    match_any = False
+                    for item in filter_include:
+                        if item.lower() in name_lower: match_any = True
+                    if not match_any: return False
+                else:
+                    if filter_include.lower() not in name_lower: return False
             
-            # 3. AUSSCHLUSS (Exclude)
-            # z.B. "II" darf nicht vorkommen (für die 1. Mannschaft)
+            # 3. Exclude Check (Darf NICHT enthalten sein)
             if filter_exclude:
-                if filter_exclude.lower() in name_lower: 
-                    return False
+                if isinstance(filter_exclude, list):
+                    for item in filter_exclude:
+                        if item.lower() in name_lower: return False
+                else:
+                    if filter_exclude.lower() in name_lower: return False
                     
             return True
 
@@ -78,7 +86,7 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
             header_text = "".join(headers)
             rows = table.find_all('tr')
 
-            # --- A: TABELLE ---
+            # --- A: LIGA TABELLE ---
             if "rang" in header_text and "punkte" in header_text:
                 for row in rows:
                     cols = row.find_all('td')
