@@ -8,14 +8,16 @@ app = Flask(__name__)
 
 # Konfiguration der Teams, URLs und Filter
 # Format: "TeamName": ["URL", "Pflicht-Suchwort", "Verbotenes-Wort"]
+# Wenn "Pflicht" und "Verbot" None sind, gilt der Standard-Filter ("Birkesdorf" oder "BTV").
+
 TEAMS = {
     "mC-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424095", None, None],
     
-    # wC1: Muss "Birkesdorf" haben, darf aber selbst kein "II" sein.
+    # wC1: Muss "Birkesdorf" haben, darf aber KEIN "II" im Namen haben.
     "wC1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", "Birkesdorf", "II"], 
     
-    # wC2: Muss "II" haben.
-    "wC2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", "II", None],
+    # wC2: Muss ZWINGEND "Birkesdorf II" heißen (damit "HC Weiden II" ignoriert wird).
+    "wC2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", "Birkesdorf II", None],
     
     "mD-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424301", None, None],
     "wD1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=425685", None, None],
@@ -52,9 +54,11 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                     continue
 
                 # --- ANKER SUCHEN (Uhrzeit) ---
+                # Wir suchen die Spalte mit der Uhrzeit (Format HH:MM).
                 time_index = -1
                 row_text_list = [c.get_text(strip=True) for c in cols]
                 
+                # Check ob Spalte 2 (lange Zeile) oder 0 (kurze Zeile) eine Uhrzeit ist
                 if len(cols) > 2 and re.match(r'^\d{2}:\d{2}$', row_text_list[2]):
                     time_index = 2
                     potential_date = row_text_list[1]
@@ -66,7 +70,9 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                 if time_index == -1:
                     continue
 
+                # --- DATEN LESEN ---
                 try:
+                    # Wir brauchen genug Spalten nach der Zeit
                     if len(cols) <= time_index + 5:
                         continue
                         
@@ -76,10 +82,10 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                     tore = row_text_list[time_index + 5]
                     
                     # --- INTELLIGENTE TEAM PRÜFUNG ---
-                    # Wir definieren eine Funktion, die EINZELN prüft, ob ein Team passt.
                     def check_team_match(name):
                         name_lower = name.lower()
-                        # 1. Include Check
+                        
+                        # 1. Include Check (Muss enthalten sein)
                         if filter_include:
                             if filter_include.lower() not in name_lower:
                                 return False
@@ -88,27 +94,20 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                             if "birkesdorf" not in name_lower and "btv" not in name_lower:
                                 return False
                         
-                        # 2. Exclude Check
-                        # Das Team selbst darf das verbotene Wort nicht haben.
+                        # 2. Exclude Check (Darf NICHT enthalten sein)
                         if filter_exclude:
                             if filter_exclude.lower() in name_lower:
                                 return False
                         
                         return True
 
-                    # Jetzt prüfen wir Heim ODER Gast.
-                    # Wenn EINER von beiden unsere Kriterien erfüllt, nehmen wir das Spiel.
-                    # Das löst das Derby-Problem:
-                    # wC1 vs wC2: 
-                    # -> wC1 erfüllt Kriterien für Team 1 (Birkesdorf JA, II NEIN). -> Treffer!
-                    # -> wC2 erfüllt Kriterien für Team 2 (II JA). -> Treffer!
-                    
+                    # Wir prüfen Heim UND Gast einzeln.
+                    # Wenn einer von beiden passt, wird das Spiel angezeigt.
                     match_heim = check_team_match(heim)
                     match_gast = check_team_match(gast)
                     
                     if not match_heim and not match_gast:
                         continue
-                    
                     # -----------------------------
 
                     # PDF
