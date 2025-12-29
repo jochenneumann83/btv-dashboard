@@ -7,18 +7,23 @@ import re
 app = Flask(__name__)
 
 # Konfiguration der Teams, URLs und Filter
+# Format: "TeamName": ["URL", "Include-Filter", "Exclude-Filter"]
+# "Include": Dieser Begriff MUSS im Namen vorkommen (z.B. "II" für die Zweite).
+# "Exclude": Dieser Begriff darf NICHT vorkommen (z.B. "II" bei der Ersten).
+# Hinweis: "Birkesdorf" oder "BTV" wird vom Code AUTOMATISCH immer vorausgesetzt!
+
 TEAMS = {
     "mC-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424095", None, None],
     
-    # wC1/wC2 (Bereits gefixt)
-    "wC1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", "Birkesdorf", "II"], 
-    "wC2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", "Birkesdorf II", None],
+    # wC: Beide in einer Liga -> Wir filtern nur nach "II"
+    "wC1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", None, "II"], # Muss BTV sein, aber OHNE "II"
+    "wC2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", "II", None], # Muss BTV sein UND "II" haben
     
     "mD-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424301", None, None],
     
-    # wD1/wD2 (NEU ANGEPASST)
-    "wD1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=425685", "Birkesdorf", "II"], # Birkesdorf ohne "II"
-    "wD2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=425685", "Birkesdorf II", None], # Nur "Birkesdorf II"
+    # wD: Dasselbe Spiel wie bei der C-Jugend
+    "wD1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=425685", None, "II"], 
+    "wD2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=425685", "II", None], 
     
     "mE1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424179", None, None],
     "mE2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/teamPortrait?teamtable=2118365&pageState=vorrunde&championship=AD+25%2F26&group=423969", None, None],
@@ -44,15 +49,28 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
         soup = BeautifulSoup(response.text, 'html.parser')
         tables = soup.find_all('table', {'class': 'result-set'})
         
-        # Hilfsfunktion: Passt der Teamname?
+        # --- VERBESSERTE LOGIK ---
         def check_team_match(name):
             name_lower = name.lower()
+            
+            # 1. BASIS-CHECK: Ist es überhaupt unser Verein?
+            # Wir prüfen IMMER erst auf "Birkesdorf" oder "BTV".
+            # Das verhindert, dass wir "HC Weiden II" finden, nur weil wir nach "II" suchen.
+            if "birkesdorf" not in name_lower and "btv" not in name_lower:
+                return False
+            
+            # 2. FEIN-FILTER (Include)
+            # z.B. Suche nach "II" für die 2. Mannschaft
             if filter_include:
-                if filter_include.lower() not in name_lower: return False
-            else:
-                if "birkesdorf" not in name_lower and "btv" not in name_lower: return False
+                if filter_include.lower() not in name_lower: 
+                    return False
+            
+            # 3. AUSSCHLUSS (Exclude)
+            # z.B. "II" darf nicht vorkommen (für die 1. Mannschaft)
             if filter_exclude:
-                if filter_exclude.lower() in name_lower: return False
+                if filter_exclude.lower() in name_lower: 
+                    return False
+                    
             return True
 
         for table in tables:
@@ -60,24 +78,22 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
             header_text = "".join(headers)
             rows = table.find_all('tr')
 
-            # --- TEIL A: IST ES EINE LIGA-TABELLE? ---
+            # --- A: TABELLE ---
             if "rang" in header_text and "punkte" in header_text:
                 for row in rows:
                     cols = row.find_all('td')
                     if len(cols) >= 8:
                         try:
-                            # Rang finden (Spalte 0 oder 1)
+                            # Rang
                             rang = cols[0].get_text(strip=True)
                             col_offset = 0
                             if not rang.isdigit():
                                 if len(cols) > 1 and cols[1].get_text(strip=True).isdigit():
                                     rang = cols[1].get_text(strip=True)
                                     col_offset = 1
-                            
-                            if not rang.isdigit():
-                                continue
+                            if not rang.isdigit(): continue
 
-                            # Mannschaft finden
+                            # Mannschaft
                             possible_team_col = col_offset + 1
                             mannschaft = "Unbekannt"
                             if len(cols) > possible_team_col + 1:
@@ -90,7 +106,7 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                             else:
                                 mannschaft = cols[possible_team_col].get_text(strip=True)
 
-                            # Werte extrahieren
+                            # Werte
                             punkte = cols[-1].get_text(strip=True)
                             diff = cols[-2].get_text(strip=True)
                             tore_val = cols[-3].get_text(strip=True)
@@ -113,18 +129,15 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                                 'punkte': punkte,
                                 'is_own': is_own
                             })
-                        except Exception:
-                            continue
-                continue # Weiter zur nächsten Tabelle (verhindert Vermischung mit Spielplan)
+                        except Exception: continue
+                continue 
 
-
-            # --- TEIL B: IST ES EIN SPIELPLAN? ---
+            # --- B: SPIELPLAN ---
             current_date = "Unbekannt"
             for row in rows:
                 cols = row.find_all('td')
                 if not cols: continue
 
-                # Anker-Suche (Uhrzeit)
                 time_index = -1
                 row_text_list = [c.get_text(strip=True) for c in cols]
                 
