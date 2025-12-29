@@ -2,7 +2,7 @@ from flask import Flask, render_template
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-import re # Für Mustererkennung (Uhrzeit)
+import re
 
 app = Flask(__name__)
 
@@ -19,7 +19,6 @@ TEAMS = {
     "wE-Jugend": "https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424213"
 }
 
-# Browser-Tarnung
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
@@ -35,96 +34,87 @@ def scrape_games(url):
             return []
 
         soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Wir suchen alle Tabellen.
         tables = soup.find_all('table', {'class': 'result-set'})
         
         for table in tables:
             rows = table.find_all('tr')
-            
-            # Gedächtnis für das Datum (Initial leer)
-            current_date = "???"
+            current_date = "Unbekannt"
 
             for row in rows:
                 cols = row.find_all('td')
-                
-                # Zu wenige Spalten? Weg damit (Überschriften etc.)
-                if len(cols) < 3:
+                if not cols:
                     continue
 
-                # --- 1. DATUM & STRUKTUR ERKENNEN ---
-                # nuLiga hat zwei Zeilentypen:
-                # Typ A (Start eines Tages): [Tag, Datum, Zeit, Halle, ...]
-                # Typ B (Weiteres Spiel):    [Zeit, Halle, ...]
+                # --- STRATEGIE: ANKER SUCHEN ---
+                # Wir suchen die Spalte mit der Uhrzeit (Format HH:MM).
+                # Von dort aus navigieren wir relativ zu den anderen Spalten.
                 
-                check_col_1 = cols[1].get_text(strip=True)
+                time_index = -1
+                row_text_list = [c.get_text(strip=True) for c in cols]
                 
-                is_type_a = "." in check_col_1 and len(check_col_1) >= 6 # z.B. "24.09."
+                # Versuch 1: Ist Spalte 2 eine Uhrzeit? (Volle Zeile: Tag, Datum, Zeit...)
+                if len(cols) > 2 and re.match(r'^\d{2}:\d{2}$', row_text_list[2]):
+                    time_index = 2
+                    # Wenn Zeit an Pos 2 ist, MUSS Datum an Pos 1 sein
+                    potential_date = row_text_list[1]
+                    if "." in potential_date:
+                        current_date = potential_date
                 
-                offset = 0
-                if is_type_a:
-                    current_date = check_col_1 # Datum aktualisieren
-                    offset = 0 # Normale Indizes
-                else:
-                    # Typ B: Wir nutzen das `current_date` vom vorherigen Durchlauf
-                    offset = -2 # Indizes verschieben sich um 2 nach links
+                # Versuch 2: Ist Spalte 0 eine Uhrzeit? (Kurze Zeile: Zeit, Halle...)
+                elif len(cols) > 0 and re.match(r'^\d{2}:\d{2}$', row_text_list[0]):
+                    time_index = 0
+                    # Datum bleibt das alte (current_date)
+                
+                # Kein Anker gefunden? Dann ist es keine Spielzeile (z.B. Tabelle oder Header)
+                if time_index == -1:
+                    continue
 
-                # --- 2. IST ES WIRKLICH EIN SPIEL? ---
-                # Wir prüfen die Uhrzeit-Spalte. Bei Typ A ist es Index 2, bei Typ B Index 0.
+                # --- DATEN RELATIV ZUM ANKER LESEN ---
+                # Struktur nuLiga ist immer: [ZEIT] [HALLE] [NR] [HEIM] [GAST] [TORE]
+                # Das heißt:
+                # Heim = Zeit + 3
+                # Gast = Zeit + 4
+                # Tore = Zeit + 5
+                
                 try:
-                    time_idx = 2 + offset
-                    zeit_text = cols[time_idx].get_text(strip=True)
+                    # Wir brauchen genug Spalten nach der Zeit
+                    if len(cols) <= time_index + 5:
+                        continue
+                        
+                    zeit = row_text_list[time_index]
+                    heim = row_text_list[time_index + 3]
+                    gast = row_text_list[time_index + 4]
+                    tore = row_text_list[time_index + 5]
                     
-                    # WICHTIGSTER FILTER: Hat der Text einen Doppelpunkt? (z.B. "14:00")
-                    # Tabellenzeilen (Platz 1, 2, 3) haben KEINE Uhrzeit.
-                    if ":" not in zeit_text and "abges" not in zeit_text.lower():
-                        continue # Keine Uhrzeit -> Keine Spielzeile -> Weiter zur nächsten Zeile
-                except IndexError:
-                    continue
+                    # FILTER: Nur Birkesdorf
+                    if "birkesdorf" not in heim.lower() and "btv" not in heim.lower() and \
+                       "birkesdorf" not in gast.lower() and "btv" not in gast.lower():
+                        continue
 
-                # --- 3. IST BIRKESDORF BETEILIGT? ---
-                # Jetzt, wo wir wissen, dass es ein Spiel ist, lesen wir Heim/Gast
-                try:
-                    heim = cols[5 + offset].get_text(strip=True)
-                    gast = cols[6 + offset].get_text(strip=True)
-                    tore = cols[7 + offset].get_text(strip=True)
-                except IndexError:
-                    continue
-
-                # Check: Spielt Birkesdorf?
-                row_teams = (heim + gast).lower()
-                if "birkesdorf" not in row_teams and "btv" not in row_teams:
-                    continue # Spiel gefunden, aber ohne BTV -> ignorieren
-
-                # --- 4. PDF SUCHEN ---
-                pdf_link = None
-                # Wir suchen in allen Spalten der Zeile nach einem Download-Link
-                # Typischerweise ist es in der letzten Spalte, aber wir suchen sicherheitshalber in der ganzen Zeile
-                link_tag = row.find('a', href=True)
-                
-                if link_tag:
-                    href = link_tag['href']
-                    # nuLiga Links enthalten oft "download" oder "pdf"
-                    if 'download' in href.lower() or 'pdf' in href.lower():
-                         pdf_link = urljoin(url, href)
-                    # Manchmal ist es ein Icon Image
-                    elif link_tag.find('img'):
-                        img_src = link_tag.find('img').get('src', '')
-                        if 'pdf' in img_src.lower():
+                    # PDF LINK SUCHEN (In der ganzen Zeile)
+                    pdf_link = None
+                    for link in row.find_all('a', href=True):
+                        href = link['href']
+                        # Suchen nach "download" (nuLiga Standard) oder "pdf"
+                        if 'download' in href.lower() or 'pdf' in href.lower():
                             pdf_link = urljoin(url, href)
+                            break # Den ersten Treffer nehmen
 
-                # Spiel speichern
-                games.append({
-                    'datum': current_date,
-                    'zeit': zeit_text,
-                    'heim': heim,
-                    'gast': gast,
-                    'tore': tore,
-                    'pdf': pdf_link
-                })
+                    games.append({
+                        'datum': current_date,
+                        'zeit': zeit,
+                        'heim': heim,
+                        'gast': gast,
+                        'tore': tore,
+                        'pdf': pdf_link
+                    })
+                    
+                except Exception as e:
+                    # Falls beim Zugriff was schief geht, Zeile überspringen
+                    continue
                 
     except Exception as e:
-        print(f"Fehler: {e}")
+        print(f"Scrape Fehler: {e}")
         return []
     
     return games
@@ -136,19 +126,18 @@ def index():
     for team_name, url in TEAMS.items():
         games = scrape_games(url)
         
-        # Logik: Was ist das "aktuellste" Ergebnis?
-        # 1. Wir filtern Spiele, die ein Ergebnis haben (Doppelpunkt im Score)
+        # Logik für "Aktuellstes Spiel":
+        # nuLiga sortiert chronologisch. Das letzte Spiel in der Liste mit einem Ergebnis ist das aktuellste.
+        
         played_games = [g for g in games if ":" in g.get('tore', '')]
         
         last_game = None
         if played_games:
-            # Die Liste kommt von nuLiga chronologisch (alt -> neu).
-            # Das letzte Element [-1] ist also das neuste gespielte Spiel.
             last_game = played_games[-1]
         elif games:
-            # Saisonbeginn: Kein Spiel gespielt -> Zeige das erste kommende an
-            last_game = games[0] 
-        
+            # Wenn noch gar nicht gespielt wurde, zeige das allererste Spiel der Saison (Termin)
+            last_game = games[0]
+            
         latest_results.append({
             'team': team_name,
             'game': last_game
