@@ -2,68 +2,92 @@
 
 {% block content %}
 
-<header class="mb-6 border-l-4 border-btv-yellow pl-4">
-    <h1 class="text-3xl font-bold text-white uppercase tracking-tighter">
-        Ergebnisse
-    </h1>
-    <p class="text-gray-400 text-sm">Aktueller Spieltag im Überblick</p>
+<header class="mb-6 border-l-4 border-btv-yellow pl-4 flex justify-between items-end">
+    <div>
+        <h1 class="text-3xl font-bold text-white uppercase tracking-tighter">
+            Ergebnisse
+        </h1>
+        <p class="text-gray-400 text-sm">Aktueller Spieltag im Überblick</p>
+    </div>
+    <div class="text-[0.6rem] text-gray-600 font-mono">
+        Live-Update: 3 Min
+    </div>
 </header>
 
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
     {% for item in latest_results %}
     <a href="{{ url_for('team_detail', team_name=item.team) }}" class="block group relative">
-        <div class="bg-btv-darkgray/90 backdrop-blur-sm border border-gray-800 rounded-lg p-4 hover:border-btv-yellow/60 hover:shadow-[0_0_15px_rgba(255,215,0,0.1)] transition-all duration-300 h-full flex flex-col justify-between z-0">
+        
+        <div class="bg-btv-darkgray/90 backdrop-blur-sm border border-gray-800 rounded-lg p-4 hover:border-btv-yellow/60 hover:shadow-[0_0_15px_rgba(255,215,0,0.1)] transition-all duration-300 h-full flex flex-col relative overflow-hidden z-0">
             
-            <div class="flex justify-between items-center mb-3">
+            {% if item.status %}
+                <div title="{{ 'Sieg' if item.status == 'win' else ('Niederlage' if item.status == 'loss' else 'Unentschieden') }}" 
+                     class="absolute top-4 right-4 w-3 h-3 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)] z-20 border border-black/30
+                    {% if item.status == 'win' %} bg-green-500 shadow-green-500/60
+                    {% elif item.status == 'loss' %} bg-red-500 shadow-red-500/60
+                    {% else %} bg-yellow-400 shadow-yellow-400/60 {% endif %}">
+                </div>
+            {% endif %}
+
+            <div class="mb-3 pr-6"> 
                 <h2 class="text-lg font-bold text-white group-hover:text-btv-yellow truncate transition-colors">
                     {{ item.team }}
                 </h2>
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-600 group-hover:text-btv-yellow transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
             </div>
 
-            <div class="bg-black/60 rounded p-3 mb-2 border border-white/5 relative z-10">
+            <div class="bg-black/60 rounded p-3 mb-2 border border-white/5 relative z-10 flex-grow">
                 {% if item.game %}
+                    <div class="text-[0.6rem] text-gray-500 uppercase tracking-widest mb-1">Letztes Spiel</div>
+                    
                     <div class="flex flex-col gap-1">
                         <div class="flex justify-between text-xs">
-                            <span class="truncate {{ 'text-btv-yellow font-bold' if 'Birkesdorf' in item.game.heim else 'text-gray-400' }}">
+                            <span class="truncate w-full {{ 'text-btv-yellow font-bold' if item.game.we_are_home else 'text-gray-400' }}">
                                 {{ item.game.heim }}
                             </span>
                         </div>
                         
-                        <div class="text-center font-mono text-lg font-bold text-white py-0.5">
+                        <div class="text-center font-mono text-xl font-bold text-white py-1">
                             {{ item.game.tore }}
                         </div>
                         
                         <div class="flex justify-between text-xs text-right">
-                            <span class="w-full truncate {{ 'text-btv-yellow font-bold' if 'Birkesdorf' in item.game.gast else 'text-gray-400' }}">
+                            <span class="w-full truncate {{ 'text-btv-yellow font-bold' if not item.game.we_are_home else 'text-gray-400' }}">
                                 {{ item.game.gast }}
                             </span>
                         </div>
                     </div>
                     
-                    <div class="flex justify-center items-center gap-3 mt-2 pt-2 border-t border-gray-800">
-                        <p class="text-[0.6rem] text-gray-600">
-                            {{ item.game.datum }}
-                        </p>
-
+                    <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-800">
+                        <p class="text-[0.6rem] text-gray-500">{{ item.game.datum }}</p>
+                        
                         {% if item.game.pdf %}
                         <object class="z-20">
-                            <a href="{{ item.game.pdf }}" target="_blank" class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-900/30 border border-red-900/50 hover:bg-red-600 hover:text-white text-red-400 transition-colors" title="Spielbericht öffnen">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
-                                </svg>
-                                <span class="text-[0.55rem] font-bold uppercase tracking-wide">Bericht</span>
+                            <a href="{{ item.game.pdf }}" target="_blank" class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-900/30 border border-red-900/50 hover:bg-red-600 hover:text-white text-red-400 transition-colors">
+                                <span class="text-[0.55rem] font-bold uppercase">Bericht</span>
                             </a>
                         </object>
                         {% endif %}
                     </div>
 
                 {% else %}
-                    <p class="text-gray-600 italic text-center py-2 text-xs">Keine Daten</p>
+                    <p class="text-gray-600 italic text-center py-4 text-xs">Keine Spiele</p>
                 {% endif %}
             </div>
+
+            {% if item.next_game %}
+            <div class="mt-auto pt-2 border-t border-gray-800/50">
+                <div class="flex items-center gap-2 mb-1">
+                    <div class="w-1 h-1 bg-btv-yellow rounded-full"></div>
+                    <span class="text-[0.6rem] text-gray-400 uppercase tracking-wider">Vorschau</span>
+                </div>
+                <div class="text-xs text-gray-300 truncate">
+                    <span class="text-gray-500 text-[0.65rem] block mb-0.5">
+                        {{ item.next_game.datum }} {{ item.next_game.zeit }}
+                    </span> 
+                    vs {{ item.next_game.gast if item.next_game.we_are_home else item.next_game.heim }}
+                </div>
+            </div>
+            {% endif %}
             
         </div>
     </a>
