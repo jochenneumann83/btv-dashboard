@@ -2,9 +2,16 @@
 <html lang="de" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, tracking-tight">
     <title>BTV Dashboard | Jugend</title>
     
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#FFD700">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BTV Jugend">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='background.png') }}">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -26,27 +33,46 @@
             }
         }
     </script>
+
     <style>
+        /* Optimierung für den App-Modus */
         body {
             background-color: #050505;
             color: #ffffff;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            -webkit-tap-highlight-color: transparent;
         }
-        /* Kleiner Schein für das Logo oben rechts */
+        
         .logo-glow {
             filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.4));
         }
+
+        /* Verhindert Textmarkierung beim Tippen in der App */
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
+        }
     </style>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register("{{ url_for('static', filename='sw.js') }}")
+                .then(reg => console.log('Service Worker registriert'))
+                .catch(err => console.log('Service Worker Fehler', err));
+            });
+        }
+    </script>
 </head>
-<body class="font-sans">
+<body class="font-sans no-select">
 
     <nav class="bg-btv-black/95 border-b border-btv-yellow/20 sticky top-0 z-50 backdrop-blur-md">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             
             <a href="/" class="flex flex-col group">
-                <span class="font-bold text-xl tracking-widest text-white group-hover:text-btv-yellow transition-colors">
+                <span class="font-bold text-xl tracking-widest text-white group-hover:text-btv-yellow transition-colors uppercase">
                     BTV DASHBOARD
                 </span>
                 <span class="text-[0.6rem] text-gray-400 uppercase tracking-[0.2em] group-hover:text-white transition-colors">
@@ -54,8 +80,10 @@
                 </span>
             </a>
 
-            <a href="/">
-                <img src="{{ url_for('static', filename='background.png') }}" alt="BTV Logo" class="h-10 w-auto object-contain logo-glow hover:scale-110 transition-transform duration-300">
+            <a href="/" class="flex items-center">
+                <img src="{{ url_for('static', filename='background.png') }}" 
+                     alt="BTV Logo" 
+                     class="h-10 w-auto object-contain logo-glow hover:scale-110 transition-transform duration-300">
             </a>
 
         </div>
@@ -64,6 +92,12 @@
     <main class="flex-grow container mx-auto px-4 py-6">
         {% block content %}{% endblock %}
     </main>
+
+    <footer class="py-4 text-center border-t border-white/5 bg-btv-black">
+        <p class="text-[0.5rem] text-gray-600 uppercase tracking-[0.3em]">
+            &copy; 2025 Birkesdorfer TV - Handball
+        </p>
+    </footer>
 
 </body>
 </html>
