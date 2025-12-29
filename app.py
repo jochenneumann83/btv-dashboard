@@ -4,12 +4,11 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import re
+from datetime import datetime # Wichtig für den Datums-Vergleich
 
 app = Flask(__name__)
 
-# --- KONFIGURATION CACHE ---
-# Speichert Daten für 3 Minuten (180 Sekunden) im Arbeitsspeicher.
-# Das entlastet nuLiga und macht die Seite blitzschnell.
+# --- KONFIGURATION CACHE (3 Minuten) ---
 cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache', 'CACHE_DEFAULT_TIMEOUT': 180})
 
 # --- TEAM KONFIGURATION ---
@@ -29,7 +28,6 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
-# Hilfsfunktion (nicht cachen, da Parameter variabel)
 def scrape_games(url, filter_include=None, filter_exclude=None):
     games = []
     league_table = []
@@ -37,7 +35,7 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
     try:
         session = requests.Session()
         session.headers.update(HEADERS)
-        response = session.get(url, timeout=10) # Timeout verkürzt für schnelleren Fail
+        response = session.get(url, timeout=10)
         
         if response.status_code != 200:
             return [], []
@@ -45,7 +43,6 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
         soup = BeautifulSoup(response.text, 'html.parser')
         tables = soup.find_all('table', {'class': 'result-set'})
         
-        # --- FILTER LOGIK ---
         def check_team_match(name):
             name_lower = name.lower()
             if "birkesdorf" not in name_lower and "btv" not in name_lower: return False
@@ -132,12 +129,17 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                 time_index = -1
                 row_text_list = [c.get_text(strip=True) for c in cols]
                 
-                # Datum suchen
+                # Datum Parsing
                 if len(cols) > 2 and "." in row_text_list[1]:
                      if re.search(r'\d{1,2}\.\d{1,2}\.', row_text_list[1]):
-                        current_date = row_text_list[1]
+                        raw_date = row_text_list[1]
+                        # Versuchen wir nur das Datum zu extrahieren (dd.mm.yyyy)
+                        match = re.search(r'(\d{1,2}\.\d{1,2}\.\d{4})', raw_date)
+                        if match:
+                            current_date = match.group(1)
+                        else:
+                            current_date = raw_date
                 
-                # Zeit suchen (hh:mm)
                 for i, txt in enumerate(row_text_list):
                     if i > 5: break 
                     if re.search(r'\d{1,2}:\d{2}', txt):
@@ -147,7 +149,6 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                 if time_index == -1: continue
                 zeit = row_text_list[time_index]
                 
-                # Team suchen
                 my_team_idx = -1
                 for i in range(time_index + 1, len(cols)):
                     txt = row_text_list[i]
@@ -161,9 +162,9 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                 gast = "???"
                 tore = "-"
                 
-                # Ergebnis Logik
                 has_next = (my_team_idx + 1 < len(cols))
                 next_val = row_text_list[my_team_idx + 1] if has_next else ""
+                
                 is_score = re.search(r'\d+:\d+', next_val) or "abges" in next_val.lower()
                 
                 if is_score:
@@ -176,7 +177,6 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                     if my_team_idx + 2 < len(cols):
                         tore = row_text_list[my_team_idx + 2]
 
-                # PDF Link
                 pdf_link = None
                 for link in row.find_all('a', href=True):
                     href = link['href'].lower()
@@ -189,7 +189,6 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                         pdf_link = urljoin(url, link['href'])
                         break 
                 
-                # Ampel-Vorbereitung: Waren wir Heim?
                 we_are_home = check_team_match(heim)
 
                 games.append({
@@ -204,9 +203,10 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
     return games, league_table
 
 @app.route('/')
-@cache.cached(timeout=180) # Update alle 3 Min
+@cache.cached(timeout=180)
 def index():
     latest_results = []
+    today = datetime.now() # Heute
     
     for team_name, config in TEAMS.items():
         url, include, exclude = config
@@ -216,15 +216,27 @@ def index():
         played_games = [g for g in games if ":" in g.get('tore', '')]
         last_game = played_games[-1] if played_games else None
         
-        # 2. Nächstes Spiel (das erste ohne Ergebnis)
+        # 2. Nächstes Spiel (Muss >= Heute sein)
         next_game = None
         for g in games:
-            if ":" not in g.get('tore', '') and "abges" not in g.get('tore', '').lower():
-                next_game = g
-                break
+            if ":" in g.get('tore', '') or "abges" in g.get('tore', '').lower():
+                continue
+            
+            try:
+                g_date_str = g.get('datum', '')
+                if not g_date_str: continue
+                # Wir versuchen zu parsen
+                g_date = datetime.strptime(g_date_str, "%d.%m.%Y")
+                
+                # Check: Liegt das Datum in der Vergangenheit?
+                if g_date.date() >= today.date():
+                    next_game = g
+                    break # Wir haben das nächste Spiel gefunden
+            except Exception:
+                continue
         
         # 3. Ampel Status
-        traffic_light = None # 'win', 'loss', 'draw'
+        traffic_light = None
         if last_game and ":" in last_game['tore']:
             try:
                 tore_str = last_game['tore'].strip()
@@ -249,7 +261,7 @@ def index():
     return render_template('index.html', latest_results=latest_results)
 
 @app.route('/team/<team_name>')
-@cache.cached(timeout=180) # Update alle 3 Min
+@cache.cached(timeout=180)
 def team_detail(team_name):
     if team_name not in TEAMS: return "Team nicht gefunden", 404
     url, include, exclude = TEAMS[team_name]
