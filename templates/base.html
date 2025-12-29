@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTV Dashboard | Jugend</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        btv: {
+                            black: '#0a0a0a',
+                            yellow: '#FFD700',
+                            darkgray: '#1a1a1a',
+                            lightgray: '#2a2a2a'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #050505;
+            color: #ffffff;
+            position: relative;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Das große Hintergrund-Logo */
+        .bg-watermark {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85vmin; /* 85% der kleineren Bildschirmseite */
+            height: 85vmin;
+            background-image: url("{{ url_for('static', filename='background.png') }}");
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain;
+            opacity: 0.15; /* Transparenz: Spiel hier mit dem Wert (0.1 bis 0.3) */
+            z-index: -1;
+            pointer-events: none;
+            filter: grayscale(100%) sepia(100%) hue-rotate(5deg) saturate(500%); /* Macht es schön gelb/gold */
+        }
+    </style>
+</head>
+<body class="flex flex-col font-sans">
+
+    <div class="bg-watermark"></div>
+
+    <nav class="bg-btv-black/80 border-b border-btv-yellow/30 sticky top-0 z-50 backdrop-blur-md">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="/" class="flex flex-col group">
+                <span class="font-bold text-2xl tracking-widest text-white group-hover:text-btv-yellow transition-colors">
+                    BTV DASHBOARD
+                </span>
+                <span class="text-[0.7rem] text-gray-400 uppercase tracking-[0.2em] group-hover:text-white transition-colors">
+                    Handball-Jugend
+                </span>
+            </a>
+        </div>
+    </nav>
+
+    <main class="flex-grow container mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    </body>
+</html>
