@@ -30,44 +30,34 @@
         body {
             background-color: #050505;
             color: #ffffff;
-            position: relative;
             min-height: 100vh;
-            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
         }
-
-        /* Das große Hintergrund-Logo */
-        .bg-watermark {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 85vmin; /* 85% der kleineren Bildschirmseite */
-            height: 85vmin;
-            background-image: url("{{ url_for('static', filename='background.png') }}");
-            background-repeat: no-repeat;
-            background-position: center;
-            background-size: contain;
-            opacity: 0.15; /* Transparenz: Spiel hier mit dem Wert (0.1 bis 0.3) */
-            z-index: -1;
-            pointer-events: none;
-            filter: grayscale(100%) sepia(100%) hue-rotate(5deg) saturate(500%); /* Macht es schön gelb/gold */
+        /* Kleiner Schein für das Logo oben rechts */
+        .logo-glow {
+            filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.4));
         }
     </style>
 </head>
-<body class="flex flex-col font-sans">
+<body class="font-sans">
 
-    <div class="bg-watermark"></div>
-
-    <nav class="bg-btv-black/80 border-b border-btv-yellow/30 sticky top-0 z-50 backdrop-blur-md">
-        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+    <nav class="bg-btv-black/95 border-b border-btv-yellow/20 sticky top-0 z-50 backdrop-blur-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            
             <a href="/" class="flex flex-col group">
-                <span class="font-bold text-2xl tracking-widest text-white group-hover:text-btv-yellow transition-colors">
+                <span class="font-bold text-xl tracking-widest text-white group-hover:text-btv-yellow transition-colors">
                     BTV DASHBOARD
                 </span>
-                <span class="text-[0.7rem] text-gray-400 uppercase tracking-[0.2em] group-hover:text-white transition-colors">
+                <span class="text-[0.6rem] text-gray-400 uppercase tracking-[0.2em] group-hover:text-white transition-colors">
                     Handball-Jugend
                 </span>
             </a>
+
+            <a href="/">
+                <img src="{{ url_for('static', filename='background.png') }}" alt="BTV Logo" class="h-10 w-auto object-contain logo-glow hover:scale-110 transition-transform duration-300">
+            </a>
+
         </div>
     </nav>
 
@@ -75,5 +65,5 @@
         {% block content %}{% endblock %}
     </main>
 
-    </body>
+</body>
 </html>
