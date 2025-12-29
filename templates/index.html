@@ -44,7 +44,14 @@
                         <p class="text-sm font-semibold text-white tracking-tight">{{ item.game.datum }}</p>
                         
                         {% if item.game.pdf %}
-                        <object><a href="{{ item.game.pdf }}" target="_blank" class="px-2 py-0.5 rounded bg-red-900/30 border border-red-900/50 text-red-400 text-[0.6rem] font-bold uppercase hover:bg-red-600 hover:text-white transition-colors">Bericht</a></object>
+                        <object>
+                            <a href="{{ item.game.pdf }}" target="_blank" class="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/30 border border-red-900/50 hover:bg-red-600 hover:text-white text-red-400 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <span class="text-[0.6rem] font-bold uppercase tracking-tighter">Bericht</span>
+                            </a>
+                        </object>
                         {% endif %}
                     </div>
                 {% else %}
