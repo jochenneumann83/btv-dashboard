@@ -2,6 +2,7 @@ from flask import Flask, render_template
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+import re # Für Mustererkennung (Uhrzeit)
 
 app = Flask(__name__)
 
@@ -21,8 +22,6 @@ TEAMS = {
 # Browser-Tarnung
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
 }
 
 def scrape_games(url):
@@ -37,97 +36,92 @@ def scrape_games(url):
 
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Alle Tabellen finden (oft Spielplan + Tabelle)
+        # Wir suchen alle Tabellen.
         tables = soup.find_all('table', {'class': 'result-set'})
         
         for table in tables:
             rows = table.find_all('tr')
             
-            # WICHTIG: Gedächtnis für das Datum, falls Zeilen zusammengefasst sind
-            last_date = "Unbekannt"
+            # Gedächtnis für das Datum (Initial leer)
+            current_date = "???"
 
             for row in rows:
-                # Schnell-Check: Wenn "Birkesdorf" nicht in der ganzen Zeile vorkommt, weg damit.
-                # Das spart uns das Parsen von Liga-Tabellen, da dort meist nur "Birkesdorf" einmal vorkommt
-                # aber wir suchen ja Spielpaarungen.
-                row_text = row.get_text().lower()
-                if "birkesdorf" not in row_text:
-                    continue
-
                 cols = row.find_all('td')
                 
-                # Wir brauchen mindestens ca 5 Spalten, sonst ist es Datenmüll
-                if len(cols) < 5:
+                # Zu wenige Spalten? Weg damit (Überschriften etc.)
+                if len(cols) < 3:
                     continue
 
-                # --- INTELLIGENTE SPALTEN ZUORDNUNG ---
+                # --- 1. DATUM & STRUKTUR ERKENNEN ---
+                # nuLiga hat zwei Zeilentypen:
+                # Typ A (Start eines Tages): [Tag, Datum, Zeit, Halle, ...]
+                # Typ B (Weiteres Spiel):    [Zeit, Halle, ...]
                 
-                # Prüfen, ob Spalte 2 (Index 1) ein Datum ist (enthält Punkt, z.B. "24.09.")
-                # Struktur A (Volle Zeile): Tag | Datum | Zeit | Halle ...
-                # Struktur B (Kurze Zeile): Zeit | Halle | Nr ...
+                check_col_1 = cols[1].get_text(strip=True)
                 
-                col_offset = 0
-                current_date = ""
-
-                # Inhalt von Spalte 1 (Index 1) prüfen
-                check_col = cols[1].get_text(strip=True)
+                is_type_a = "." in check_col_1 and len(check_col_1) >= 6 # z.B. "24.09."
                 
-                if "." in check_col:
-                    # Es ist ein Datum! -> Struktur A
-                    last_date = check_col
-                    current_date = check_col
-                    col_offset = 0 # Keine Verschiebung
+                offset = 0
+                if is_type_a:
+                    current_date = check_col_1 # Datum aktualisieren
+                    offset = 0 # Normale Indizes
                 else:
-                    # Kein Datum -> Struktur B (Zeit steht vorne)
-                    current_date = last_date
-                    col_offset = -2 # Alles rutscht 2 nach links, weil Tag & Datum fehlen
-                
-                # Jetzt prüfen wir die Halle (muss 5 Ziffern haben)
-                # Halle ist bei Struktur A Index 3, bei Struktur B Index 1
-                # Mit Offset-Rechnung: Index 3 + Offset
-                try:
-                    halle_idx = 3 + col_offset
-                    halle_val = cols[halle_idx].get_text(strip=True)
-                    # Kurzer Check: Ist es eine 5-stellige Zahl? (optional, aber sicher ist sicher)
-                    if not (halle_val.isdigit() and len(halle_val) == 5):
-                        # Falls das nicht passt, ist es vielleicht doch keine Spielzeile
-                        # Aber wir sind tolerant, falls die Halle mal fehlt.
-                        pass
-                except:
-                    # Wenn Zugriff fehlschlägt, ist die Zeile komisch -> skip
-                    continue
+                    # Typ B: Wir nutzen das `current_date` vom vorherigen Durchlauf
+                    offset = -2 # Indizes verschieben sich um 2 nach links
 
-                # Daten extrahieren mit Offset
-                # Heim: A=5, B=3 -> 5 + offset
-                # Gast: A=6, B=4 -> 6 + offset
-                # Tore: A=7, B=5 -> 7 + offset
-                
+                # --- 2. IST ES WIRKLICH EIN SPIEL? ---
+                # Wir prüfen die Uhrzeit-Spalte. Bei Typ A ist es Index 2, bei Typ B Index 0.
                 try:
-                    zeit = cols[2 + col_offset].get_text(strip=True)
-                    heim = cols[5 + col_offset].get_text(strip=True)
-                    gast = cols[6 + col_offset].get_text(strip=True)
-                    tore = cols[7 + col_offset].get_text(strip=True) # Ergebnis
+                    time_idx = 2 + offset
+                    zeit_text = cols[time_idx].get_text(strip=True)
                     
-                    # PDF Link suchen
-                    pdf_link = None
-                    link_tag = row.find('a', href=True)
-                    if link_tag:
-                        href = link_tag['href']
-                        if 'pdf' in href.lower() or link_tag.find('img', alt=lambda x: x and 'PDF' in x):
-                            pdf_link = urljoin(url, href)
-                    
-                    games.append({
-                        'datum': current_date,
-                        'zeit': zeit,
-                        'heim': heim,
-                        'gast': gast,
-                        'tore': tore,
-                        'pdf': pdf_link
-                    })
-
+                    # WICHTIGSTER FILTER: Hat der Text einen Doppelpunkt? (z.B. "14:00")
+                    # Tabellenzeilen (Platz 1, 2, 3) haben KEINE Uhrzeit.
+                    if ":" not in zeit_text and "abges" not in zeit_text.lower():
+                        continue # Keine Uhrzeit -> Keine Spielzeile -> Weiter zur nächsten Zeile
                 except IndexError:
-                    # Falls Spalten fehlen
                     continue
+
+                # --- 3. IST BIRKESDORF BETEILIGT? ---
+                # Jetzt, wo wir wissen, dass es ein Spiel ist, lesen wir Heim/Gast
+                try:
+                    heim = cols[5 + offset].get_text(strip=True)
+                    gast = cols[6 + offset].get_text(strip=True)
+                    tore = cols[7 + offset].get_text(strip=True)
+                except IndexError:
+                    continue
+
+                # Check: Spielt Birkesdorf?
+                row_teams = (heim + gast).lower()
+                if "birkesdorf" not in row_teams and "btv" not in row_teams:
+                    continue # Spiel gefunden, aber ohne BTV -> ignorieren
+
+                # --- 4. PDF SUCHEN ---
+                pdf_link = None
+                # Wir suchen in allen Spalten der Zeile nach einem Download-Link
+                # Typischerweise ist es in der letzten Spalte, aber wir suchen sicherheitshalber in der ganzen Zeile
+                link_tag = row.find('a', href=True)
+                
+                if link_tag:
+                    href = link_tag['href']
+                    # nuLiga Links enthalten oft "download" oder "pdf"
+                    if 'download' in href.lower() or 'pdf' in href.lower():
+                         pdf_link = urljoin(url, href)
+                    # Manchmal ist es ein Icon Image
+                    elif link_tag.find('img'):
+                        img_src = link_tag.find('img').get('src', '')
+                        if 'pdf' in img_src.lower():
+                            pdf_link = urljoin(url, href)
+
+                # Spiel speichern
+                games.append({
+                    'datum': current_date,
+                    'zeit': zeit_text,
+                    'heim': heim,
+                    'gast': gast,
+                    'tore': tore,
+                    'pdf': pdf_link
+                })
                 
     except Exception as e:
         print(f"Fehler: {e}")
@@ -142,13 +136,17 @@ def index():
     for team_name, url in TEAMS.items():
         games = scrape_games(url)
         
-        # Suche letztes echtes Ergebnis (wo ein Doppelpunkt im Score ist)
+        # Logik: Was ist das "aktuellste" Ergebnis?
+        # 1. Wir filtern Spiele, die ein Ergebnis haben (Doppelpunkt im Score)
         played_games = [g for g in games if ":" in g.get('tore', '')]
         
         last_game = None
         if played_games:
-            last_game = played_games[-1] 
+            # Die Liste kommt von nuLiga chronologisch (alt -> neu).
+            # Das letzte Element [-1] ist also das neuste gespielte Spiel.
+            last_game = played_games[-1]
         elif games:
+            # Saisonbeginn: Kein Spiel gespielt -> Zeige das erste kommende an
             last_game = games[0] 
         
         latest_results.append({
