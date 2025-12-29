@@ -5,7 +5,7 @@ from urllib.parse import urljoin
 
 app = Flask(__name__)
 
-# Konfiguration der Teams und URLs (Stand: Schritt 1)
+# Konfiguration der Teams und URLs
 TEAMS = {
     "mC-Jugend": "https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424095",
     "wC1-Jugend": "https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246",
@@ -18,45 +18,51 @@ TEAMS = {
     "wE-Jugend": "https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424213"
 }
 
+# TÄUSCHUNGSMANÖVER: Wir geben uns als normaler Browser aus
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Cache-Control': 'max-age=0',
+}
+
 def scrape_games(url):
-    """Holt Spiele von nuLiga und filtert strikt nach 'Birkesdorf'."""
     games = []
     try:
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
+        # Session nutzen, um Cookies zu speichern (wirkt menschlicher)
+        session = requests.Session()
+        session.headers.update(HEADERS)
         
-        # Tabelle suchen
+        response = session.get(url, timeout=15)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
         table = soup.find('table', {'class': 'result-set'})
+        
         if not table:
             return []
 
         rows = table.find_all('tr')
         for row in rows:
             cols = row.find_all('td')
-            # Eine Spielzeile hat in nuLiga meist viele Spalten
             if len(cols) > 6:
                 datum = cols[1].get_text(strip=True)
                 zeit = cols[2].get_text(strip=True)
-                
-                # Spaltenindizes können variieren, meistens: 5=Heim, 6=Gast
                 heim = cols[5].get_text(strip=True)
                 gast = cols[6].get_text(strip=True)
-                
-                # FILTER: Nur Zeilen, in denen "Birkesdorf" vorkommt
+                tore = cols[7].get_text(strip=True)
+
+                # Filter: Nur Birkesdorf Spiele
                 if "Birkesdorf" not in heim and "Birkesdorf" not in gast:
                     continue
 
-                # Ergebnis (oft Spalte 7 oder 8)
-                tore = cols[7].get_text(strip=True) 
-
-                # PDF Link suchen
                 pdf_link = None
                 link_tag = row.find('a', href=True)
                 if link_tag:
                     href = link_tag['href']
-                    # Prüfen auf PDF Icon (img mit alt text) oder Link-Text
                     if 'pdf' in href.lower() or link_tag.find('img', alt=lambda x: x and 'PDF' in x):
                          pdf_link = urljoin(url, href)
                 
@@ -68,21 +74,35 @@ def scrape_games(url):
                     'tore': tore,
                     'pdf': pdf_link
                 })
+                
     except Exception as e:
-        print(f"Fehler beim Scrapen von {url}: {e}")
+        # Fehler wird in den Logs von Render angezeigt
+        print(f"FEHLER beim Scrapen von {url}: {e}")
+        # Wir geben einen Dummy-Eintrag zurück, damit man den Fehler auf der Seite sieht
+        return [{'error': str(e)}]
     
     return games
 
 @app.route('/')
 def index():
-    # Startseite: Holt für jedes Team das letzte bekannte Ergebnis
     latest_results = []
     
     for team_name, url in TEAMS.items():
         games = scrape_games(url)
-        # Wir suchen das letzte Spiel, das tatsächlich ein Ergebnis hat (Doppelpunkt im String)
-        played_games = [g for g in games if ":" in g['tore']]
         
+        # Falls ein Fehler auftrat (Bot-Sperre etc.)
+        if games and 'error' in games[0]:
+            error_msg = games[0]['error']
+            # Wir zeigen den Fehler auf der Karte an
+            latest_results.append({
+                'team': team_name,
+                'game': {'heim': 'Fehler', 'gast': 'nuLiga', 'tore': 'ERR', 'datum': 'Verbindung geblockt'},
+                'error': error_msg
+            })
+            continue
+
+        # Normaler Ablauf: Suche letztes echtes Spiel
+        played_games = [g for g in games if ":" in g.get('tore', '')]
         last_game = played_games[-1] if played_games else None
         
         latest_results.append({
@@ -100,8 +120,9 @@ def team_detail(team_name):
     url = TEAMS[team_name]
     games = scrape_games(url)
     
-    # Optional: Liste umdrehen, damit das neuste Spiel oben ist? 
-    # Aktuell ist es chronologisch (nuLiga Standard).
+    # Fehlerprüfung für die Detailseite
+    if games and 'error' in games[0]:
+        return f"<h1>Fehler beim Laden</h1><p>{games[0]['error']}</p><p>NuLiga blockiert wahrscheinlich die Anfrage von Render.</p>"
     
     return render_template('team.html', team_name=team_name, games=games)
 
