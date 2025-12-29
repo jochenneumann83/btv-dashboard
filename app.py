@@ -7,7 +7,6 @@ import re
 app = Flask(__name__)
 
 # Konfiguration der Teams
-# Format: "TeamName": ["URL", "Include-Filter", "Exclude-Filter"]
 TEAMS = {
     "mC-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424095", None, None],
     "wC1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", None, ["II", "2"]], 
@@ -42,11 +41,7 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
         # --- TEAM MATCH LOGIK ---
         def check_team_match(name):
             name_lower = name.lower()
-            
-            # 1. Basis: Ist es Birkesdorf?
             if "birkesdorf" not in name_lower and "btv" not in name_lower: return False
-            
-            # 2. Include (Muss enthalten sein)
             if filter_include:
                 if isinstance(filter_include, list):
                     match_any = False
@@ -57,8 +52,6 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                     if not match_any: return False
                 else:
                     if filter_include.lower() not in name_lower: return False
-            
-            # 3. Exclude (Darf NICHT enthalten sein)
             if filter_exclude:
                 if isinstance(filter_exclude, list):
                     for item in filter_exclude:
@@ -74,9 +67,14 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
 
             # --- A: LIGA TABELLE ---
             if "rang" in header_text and "punkte" in header_text:
+                
+                # Check: Haben wir Tore/Diff Spalten?
+                is_long_format = "tore" in header_text or "diff" in header_text
+
                 for row in rows:
                     cols = row.find_all('td')
-                    if len(cols) >= 8:
+                    # Wir brauchen eine Mindestanzahl an Spalten (Short=ca 7, Long=ca 9)
+                    if len(cols) >= 6:
                         try:
                             # Rang reparieren
                             rang = cols[0].get_text(strip=True)
@@ -100,15 +98,27 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                             else:
                                 mannschaft = cols[possible_team_col].get_text(strip=True)
 
-                            # Werte von hinten lesen
-                            punkte = cols[-1].get_text(strip=True)
-                            diff = cols[-2].get_text(strip=True)
-                            tore_val = cols[-3].get_text(strip=True)
-                            n_val = cols[-4].get_text(strip=True)
-                            u_val = cols[-5].get_text(strip=True)
-                            s_val = cols[-6].get_text(strip=True)
-                            spiele = cols[-7].get_text(strip=True)
-                            
+                            # WERTE AUSLESEN (Unterscheidung Lang/Kurz)
+                            if is_long_format:
+                                # Standard: ... | S | U | N | Tore | Diff | Punkte
+                                punkte = cols[-1].get_text(strip=True)
+                                diff = cols[-2].get_text(strip=True)
+                                tore_val = cols[-3].get_text(strip=True)
+                                n_val = cols[-4].get_text(strip=True)
+                                u_val = cols[-5].get_text(strip=True)
+                                s_val = cols[-6].get_text(strip=True)
+                                spiele = cols[-7].get_text(strip=True)
+                            else:
+                                # Kurz: ... | S | U | N | Punkte
+                                punkte = cols[-1].get_text(strip=True)
+                                n_val = cols[-2].get_text(strip=True)
+                                u_val = cols[-3].get_text(strip=True)
+                                s_val = cols[-4].get_text(strip=True)
+                                spiele = cols[-5].get_text(strip=True)
+                                # Dummies setzen
+                                diff = "-"
+                                tore_val = "-"
+
                             is_own = check_team_match(mannschaft)
 
                             league_table.append({
@@ -126,74 +136,58 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                         except Exception: continue
                 continue 
 
-            # --- B: SPIELPLAN (DYNAMISCHE SUCHE) ---
+            # --- B: SPIELPLAN ---
             current_date = "Unbekannt"
             for row in rows:
                 cols = row.find_all('td')
                 if not cols: continue
 
-                # 1. ZEIT / DATUM FINDEN (Anker)
                 time_index = -1
                 row_text_list = [c.get_text(strip=True) for c in cols]
                 
-                # Datum merken (Spalte 1 bei langen Zeilen)
+                # Anker-Suche
                 if len(cols) > 2 and "." in row_text_list[1]:
-                     # Prüfen ob Datum-Format (Tag.Monat.)
                      if re.search(r'\d{1,2}\.\d{1,2}\.', row_text_list[1]):
                         current_date = row_text_list[1]
 
-                # Zeit suchen (hh:mm) - Toleranter Regex
                 for i, txt in enumerate(row_text_list):
-                    if i > 5: break # Zeit steht meist vorne
+                    if i > 5: break 
                     if re.search(r'\d{1,2}:\d{2}', txt):
                         time_index = i
                         break
                 
-                if time_index == -1: continue # Keine Zeit = Kein Spiel
+                if time_index == -1: continue
 
                 zeit = row_text_list[time_index]
                 
-                # 2. MANNSCHAFTEN DYNAMISCH SUCHEN
-                # Wir suchen in allen Spalten nach "time_index" nach unserem Team
                 my_team_idx = -1
-                
                 for i in range(time_index + 1, len(cols)):
                     txt = row_text_list[i]
                     if check_team_match(txt):
                         my_team_idx = i
                         break
                 
-                if my_team_idx == -1: continue # Unser Team spielt hier nicht
+                if my_team_idx == -1: continue 
 
-                # 3. HEIM / GAST / TORE ZUORDNEN
-                # Logik:
-                # - Ist die Spalte RECHTS neben mir ein Ergebnis (Zahl:Zahl)? -> Ich bin Gast.
-                # - Ist die Spalte RECHTS neben mir Text (Gegner)? -> Ich bin Heim.
-                
                 heim = "???"
                 gast = "???"
                 tore = "-"
                 
-                # Sicherstellen, dass wir nicht out of bounds gehen
                 has_next = (my_team_idx + 1 < len(cols))
                 next_val = row_text_list[my_team_idx + 1] if has_next else ""
                 
                 is_score = re.search(r'\d+:\d+', next_val) or "abges" in next_val.lower()
                 
                 if is_score:
-                    # Struktur: [HEIM] [ICH=GAST] [ERGEBNIS]
                     gast = row_text_list[my_team_idx]
                     heim = row_text_list[my_team_idx - 1]
                     tore = next_val
                 else:
-                    # Struktur: [ICH=HEIM] [GAST] [ERGEBNIS]
                     heim = row_text_list[my_team_idx]
                     gast = next_val
-                    # Ergebnis ist dann eins weiter (idx + 2), falls vorhanden
                     if my_team_idx + 2 < len(cols):
                         tore = row_text_list[my_team_idx + 2]
 
-                # 4. PDF SUCHEN
                 pdf_link = None
                 for link in row.find_all('a', href=True):
                     href = link['href'].lower()
