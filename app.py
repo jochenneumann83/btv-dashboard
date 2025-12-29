@@ -18,32 +18,34 @@ TEAMS = {
     "wE-Jugend": "https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424213"
 }
 
-# TÄUSCHUNGSMANÖVER: Wir geben uns als normaler Browser aus
+# Browser-Tarnung
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-    'Cache-Control': 'max-age=0',
 }
 
 def scrape_games(url):
     games = []
     try:
-        # Session nutzen, um Cookies zu speichern (wirkt menschlicher)
         session = requests.Session()
         session.headers.update(HEADERS)
+        response = session.get(url, timeout=20)
         
-        response = session.get(url, timeout=15)
-        response.raise_for_status()
-        
+        # DEBUG: Prüfen, ob wir HTML bekommen
+        if response.status_code != 200:
+            return [{'error': f'Status Code Fehler: {response.status_code}'}]
+
         soup = BeautifulSoup(response.text, 'html.parser')
-        table = soup.find('table', {'class': 'result-set'})
         
+        # DEBUG: Findet er überhaupt eine Tabelle?
+        table = soup.find('table', {'class': 'result-set'})
         if not table:
-            return []
+            # Falls nuLiga die Klasse geändert hat, suchen wir irgendeine Tabelle
+            if soup.find('table'):
+                return [{'error': 'Tabelle gefunden, aber falsche CSS-Klasse (Struktur geändert?)'}]
+            else:
+                return [{'error': 'Keine Tabelle im HTML gefunden (Evtl. Bot-Schutz Seite?)'}]
 
         rows = table.find_all('tr')
         for row in rows:
@@ -55,9 +57,10 @@ def scrape_games(url):
                 gast = cols[6].get_text(strip=True)
                 tore = cols[7].get_text(strip=True)
 
-                # Filter: Nur Birkesdorf Spiele
-                if "Birkesdorf" not in heim and "Birkesdorf" not in gast:
-                    continue
+                # DEBUG: Filter ist DEAKTIVIERT!
+                # Wir nehmen jetzt ALLES auf, um zu sehen, ob überhaupt was kommt.
+                # if "Birkesdorf" not in heim and "Birkesdorf" not in gast:
+                #     continue
 
                 pdf_link = None
                 link_tag = row.find('a', href=True)
@@ -76,11 +79,12 @@ def scrape_games(url):
                 })
                 
     except Exception as e:
-        # Fehler wird in den Logs von Render angezeigt
-        print(f"FEHLER beim Scrapen von {url}: {e}")
-        # Wir geben einen Dummy-Eintrag zurück, damit man den Fehler auf der Seite sieht
         return [{'error': str(e)}]
     
+    # Fallback, falls Schleife durchläuft aber nichts appended wurde
+    if not games:
+        return [{'error': 'Tabelle da, aber keine Zeilen erkannt.'}]
+
     return games
 
 @app.route('/')
@@ -90,21 +94,23 @@ def index():
     for team_name, url in TEAMS.items():
         games = scrape_games(url)
         
-        # Falls ein Fehler auftrat (Bot-Sperre etc.)
+        # Fehlerbehandlung anzeigen
         if games and 'error' in games[0]:
-            error_msg = games[0]['error']
-            # Wir zeigen den Fehler auf der Karte an
             latest_results.append({
                 'team': team_name,
-                'game': {'heim': 'Fehler', 'gast': 'nuLiga', 'tore': 'ERR', 'datum': 'Verbindung geblockt'},
-                'error': error_msg
+                'game': {'heim': 'DEBUG', 'gast': 'INFO', 'tore': '!!!', 'datum': games[0]['error']},
+                'error': games[0]['error']
             })
             continue
 
-        # Normaler Ablauf: Suche letztes echtes Spiel
+        # Normales Spiel suchen
         played_games = [g for g in games if ":" in g.get('tore', '')]
         last_game = played_games[-1] if played_games else None
         
+        # Falls wir kein gespieltes Spiel finden, nehmen wir das allerletzte (zukünftige Spiel) zur Ansicht
+        if not last_game and games:
+            last_game = games[-1]
+
         latest_results.append({
             'team': team_name,
             'game': last_game
@@ -120,10 +126,9 @@ def team_detail(team_name):
     url = TEAMS[team_name]
     games = scrape_games(url)
     
-    # Fehlerprüfung für die Detailseite
     if games and 'error' in games[0]:
-        return f"<h1>Fehler beim Laden</h1><p>{games[0]['error']}</p><p>NuLiga blockiert wahrscheinlich die Anfrage von Render.</p>"
-    
+         return f"<h1>Debug Info</h1><p>{games[0]['error']}</p>"
+
     return render_template('team.html', team_name=team_name, games=games)
 
 if __name__ == '__main__':
