@@ -9,7 +9,6 @@
     <meta name="theme-color" content="#FFD700">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="BTV Jugend">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='background.png') }}">
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -19,15 +18,7 @@
             theme: {
                 extend: {
                     colors: {
-                        btv: {
-                            black: '#0a0a0a',
-                            yellow: '#FFD700',
-                            darkgray: '#1a1a1a',
-                            lightgray: '#2a2a2a'
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        btv: { black: '#0a0a0a', yellow: '#FFD700', darkgray: '#1a1a1a' }
                     }
                 }
             }
@@ -35,69 +26,59 @@
     </script>
 
     <style>
-        /* Optimierung für den App-Modus */
-        body {
-            background-color: #050505;
-            color: #ffffff;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            -webkit-tap-highlight-color: transparent;
-        }
-        
-        .logo-glow {
-            filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.4));
-        }
-
-        /* Verhindert Textmarkierung beim Tippen in der App */
-        .no-select {
-            user-select: none;
-            -webkit-user-select: none;
-        }
+        body { background-color: #050505; color: #ffffff; min-height: 100vh; display: flex; flex-direction: column; }
+        .logo-glow { filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.4)); }
+        #install-banner { display: none; }
     </style>
 
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register("{{ url_for('static', filename='sw.js') }}")
-                .then(reg => console.log('Service Worker registriert'))
-                .catch(err => console.log('Service Worker Fehler', err));
+                navigator.serviceWorker.register("{{ url_for('static', filename='sw.js') }}");
             });
         }
+
+        // Logik für den Installations-Hinweis
+        window.addEventListener('DOMContentLoaded', () => {
+            const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+
+            if (!isStandalone) {
+                const banner = document.getElementById('install-banner');
+                const text = document.getElementById('install-text');
+                banner.style.display = 'block';
+
+                if (isIos) {
+                    text.innerText = "Tippe auf 'Teilen' und dann 'Zum Home-Bildschirm', um die App zu speichern.";
+                } else {
+                    text.innerText = "Tippe auf die 3 Punkte oben rechts und 'App installieren', um die BTV App zu speichern.";
+                }
+            }
+        });
     </script>
 </head>
-<body class="font-sans no-select">
+<body class="font-sans">
+
+    <div id="install-banner" class="bg-btv-yellow text-black px-4 py-2 text-center text-xs font-bold shadow-lg sticky top-0 z-[60]">
+        <div class="flex justify-between items-center max-w-4xl mx-auto">
+            <span id="install-text"></span>
+            <button onclick="document.getElementById('install-banner').style.display='none'" class="ml-4 text-lg">×</button>
+        </div>
+    </div>
 
     <nav class="bg-btv-black/95 border-b border-btv-yellow/20 sticky top-0 z-50 backdrop-blur-md">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-            
             <a href="/" class="flex flex-col group">
-                <span class="font-bold text-xl tracking-widest text-white group-hover:text-btv-yellow transition-colors uppercase">
-                    BTV DASHBOARD
-                </span>
-                <span class="text-[0.6rem] text-gray-400 uppercase tracking-[0.2em] group-hover:text-white transition-colors">
-                    Handball-Jugend
-                </span>
+                <span class="font-bold text-xl tracking-widest text-white group-hover:text-btv-yellow uppercase">BTV DASHBOARD</span>
+                <span class="text-[0.6rem] text-gray-400 uppercase tracking-[0.2em]">Handball-Jugend</span>
             </a>
-
-            <a href="/" class="flex items-center">
-                <img src="{{ url_for('static', filename='background.png') }}" 
-                     alt="BTV Logo" 
-                     class="h-10 w-auto object-contain logo-glow hover:scale-110 transition-transform duration-300">
-            </a>
-
+            <a href="/"><img src="{{ url_for('static', filename='background.png') }}" class="h-10 w-auto logo-glow transition-transform hover:scale-110"></a>
         </div>
     </nav>
 
     <main class="flex-grow container mx-auto px-4 py-6">
         {% block content %}{% endblock %}
     </main>
-
-    <footer class="py-4 text-center border-t border-white/5 bg-btv-black">
-        <p class="text-[0.5rem] text-gray-600 uppercase tracking-[0.3em]">
-            &copy; 2025 Birkesdorfer TV - Handball
-        </p>
-    </footer>
 
 </body>
 </html>
