@@ -38,7 +38,6 @@
             });
         }
 
-        // Logik für den Installations-Hinweis
         window.addEventListener('DOMContentLoaded', () => {
             const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
@@ -49,9 +48,10 @@
                 banner.style.display = 'block';
 
                 if (isIos) {
-                    text.innerText = "Tippe auf 'Teilen' und dann 'Zum Home-Bildschirm', um die App zu speichern.";
+                    text.innerText = "Tippe auf 'Teilen' und 'Zum Home-Bildschirm', um die App zu speichern.";
                 } else {
-                    text.innerText = "Tippe auf die 3 Punkte oben rechts und 'App installieren', um die BTV App zu speichern.";
+                    // Hier ist der angepasste, weniger irreführende Text für Android
+                    text.innerText = "Tippe auf die 3 Punkte und 'App installieren' oder 'Zum Startbildschirm hinzufügen'.";
                 }
             }
         });
@@ -62,7 +62,7 @@
     <div id="install-banner" class="bg-btv-yellow text-black px-4 py-2 text-center text-xs font-bold shadow-lg sticky top-0 z-[60]">
         <div class="flex justify-between items-center max-w-4xl mx-auto">
             <span id="install-text"></span>
-            <button onclick="document.getElementById('install-banner').style.display='none'" class="ml-4 text-lg">×</button>
+            <button onclick="document.getElementById('install-banner').style.display='none'" class="ml-4 text-lg p-1">×</button>
         </div>
     </div>
 
