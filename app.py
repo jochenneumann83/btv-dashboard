@@ -9,11 +9,17 @@ app = Flask(__name__)
 # Konfiguration der Teams, URLs und Filter
 TEAMS = {
     "mC-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424095", None, None],
+    
+    # wC1/wC2 (Bereits gefixt)
     "wC1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", "Birkesdorf", "II"], 
     "wC2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", "Birkesdorf II", None],
+    
     "mD-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424301", None, None],
-    "wD1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=425685", None, None],
-    "wD2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=425685", None, None],
+    
+    # wD1/wD2 (NEU ANGEPASST)
+    "wD1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=425685", "Birkesdorf", "II"], # Birkesdorf ohne "II"
+    "wD2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=425685", "Birkesdorf II", None], # Nur "Birkesdorf II"
+    
     "mE1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424179", None, None],
     "mE2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/teamPortrait?teamtable=2118365&pageState=vorrunde&championship=AD+25%2F26&group=423969", None, None],
     "wE-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424213", None, None]
@@ -50,44 +56,33 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
             return True
 
         for table in tables:
-            # Wir analysieren den Header der Tabelle um zu entscheiden, WAS das für eine Tabelle ist
             headers = [th.get_text(strip=True).lower() for th in table.find_all('th')]
             header_text = "".join(headers)
             rows = table.find_all('tr')
 
-            # --- ENTSCHEIDUNG: IST ES EINE LIGA-TABELLE? ---
-            # Eine Tabelle muss "Rang" UND "Punkte" im Header haben.
+            # --- TEIL A: IST ES EINE LIGA-TABELLE? ---
             if "rang" in header_text and "punkte" in header_text:
                 for row in rows:
                     cols = row.find_all('td')
                     if len(cols) >= 8:
                         try:
-                            # 1. RANG FINDEN
-                            # Spalte 0 ist oft leer oder ein Bild. Spalte 1 ist dann der Rang.
-                            # Wir prüfen: Ist Spalte 0 eine Zahl? Wenn nein, nehmen wir Spalte 1.
+                            # Rang finden (Spalte 0 oder 1)
                             rang = cols[0].get_text(strip=True)
                             col_offset = 0
-                            
                             if not rang.isdigit():
                                 if len(cols) > 1 and cols[1].get_text(strip=True).isdigit():
                                     rang = cols[1].get_text(strip=True)
-                                    col_offset = 1 # Alles verschiebt sich um 1 nach rechts
+                                    col_offset = 1
                             
-                            # Wenn wir immer noch keinen Rang haben, ist es vielleicht eine Header-Zeile -> Skip
                             if not rang.isdigit():
                                 continue
 
-                            # 2. MANNSCHAFT FINDEN
-                            # Normalerweise Index 2 (wenn Offset 0) oder Index 3 (wenn Offset 1)
-                            # Aber wir suchen einfach die erste Spalte nach dem Rang, die Text hat
-                            mannschaft = "Unbekannt"
-                            # Wir suchen ab col_offset + 1
+                            # Mannschaft finden
                             possible_team_col = col_offset + 1
-                            if len(cols) > possible_team_col + 1: # Sicherheitscheck
-                                # Manchmal ist da noch ein Bild dazwischen. Wir nehmen die Spalte mit dem längsten Text
+                            mannschaft = "Unbekannt"
+                            if len(cols) > possible_team_col + 1:
                                 text_a = cols[possible_team_col].get_text(strip=True)
                                 text_b = cols[possible_team_col + 1].get_text(strip=True)
-                                
                                 if len(text_b) > len(text_a) and len(text_b) > 3:
                                     mannschaft = text_b
                                 else:
@@ -95,7 +90,7 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                             else:
                                 mannschaft = cols[possible_team_col].get_text(strip=True)
 
-                            # 3. WERTE (Von rechts lesen ist sicherer)
+                            # Werte extrahieren
                             punkte = cols[-1].get_text(strip=True)
                             diff = cols[-2].get_text(strip=True)
                             tore_val = cols[-3].get_text(strip=True)
@@ -120,14 +115,10 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                             })
                         except Exception:
                             continue
-                
-                # WICHTIG: Wenn wir die Tabelle als "Liga-Tabelle" erkannt haben, 
-                # suchen wir darin NICHT nach Spielen. Wir gehen zur nächsten Tabelle.
-                continue 
+                continue # Weiter zur nächsten Tabelle (verhindert Vermischung mit Spielplan)
 
 
-            # --- ENTSCHEIDUNG: IST ES EIN SPIELPLAN? ---
-            # Wenn es keine Liga-Tabelle war, prüfen wir, ob es Spiele sind.
+            # --- TEIL B: IST ES EIN SPIELPLAN? ---
             current_date = "Unbekannt"
             for row in rows:
                 cols = row.find_all('td')
