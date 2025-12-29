@@ -4,7 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import re
-from datetime import datetime # Wichtig für Sortierung
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -134,10 +134,8 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                      if re.search(r'\d{1,2}\.\d{1,2}\.', row_text_list[1]):
                         raw_date = row_text_list[1]
                         match = re.search(r'(\d{1,2}\.\d{1,2}\.\d{4})', raw_date)
-                        if match:
-                            current_date = match.group(1)
-                        else:
-                            current_date = raw_date
+                        if match: current_date = match.group(1)
+                        else: current_date = raw_date
                 
                 for i, txt in enumerate(row_text_list):
                     if i > 5: break 
@@ -161,21 +159,71 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                 gast = "???"
                 tore = "-"
                 
+                # --- LOGIK FÜR ERGEBNIS & HEIM/GAST ---
                 has_next = (my_team_idx + 1 < len(cols))
                 next_val = row_text_list[my_team_idx + 1] if has_next else ""
                 
+                # Ist das nächste Feld ein Ergebnis (z.B. "24:22")?
                 is_score = re.search(r'\d+:\d+', next_val) or "abges" in next_val.lower()
                 
                 if is_score:
-                    gast = row_text_list[my_team_idx]
-                    heim = row_text_list[my_team_idx - 1]
-                    tore = next_val
+                    # Fall 1: Spiel VORBEI (Es gibt ein Ergebnis)
+                    # Aufbau: [Gegner] [ICH] [Ergebnis]  <- Ich bin Gast
+                    # Oder:   [ICH] [Gegner] [Ergebnis]  <- Ich bin Heim
+                    # Wir prüfen, was links steht.
+                    
+                    # Da my_team_idx unsere Position ist:
+                    # Wenn next_val das Ergebnis ist, ist rechts vom Gegner das Ergebnis.
+                    # Das bedeutet: [Pos X] [Pos X+1] [Pos X+2 = Ergebnis]
+                    
+                    # Moment, einfacher:
+                    # nuLiga Standard: Heim | Gast | Tore
+                    # Wenn ich an Pos X bin und Pos X+1 ist das Ergebnis -> Ich bin GAST (X-1 war Heim)
+                    # Wenn ich an Pos X bin und Pos X+1 ist Gegner und Pos X+2 ist Ergebnis -> Ich bin HEIM
+                    
+                    if re.search(r'\d+:\d+', next_val) or "abges" in next_val.lower():
+                        # Wenn direkt neben mir das Ergebnis steht, war ich Gast
+                        gast = row_text_list[my_team_idx]
+                        heim = row_text_list[my_team_idx - 1]
+                        tore = next_val
+                    else:
+                        # Fallback (Sollte durch Logik oben abgedeckt sein, aber sicher ist sicher)
+                        heim = row_text_list[my_team_idx]
+                        gast = next_val
+                        if my_team_idx + 2 < len(cols):
+                            tore = row_text_list[my_team_idx + 2]
+                
                 else:
-                    heim = row_text_list[my_team_idx]
-                    gast = next_val
-                    if my_team_idx + 2 < len(cols):
-                        tore = row_text_list[my_team_idx + 2]
+                    # Fall 2: ZUKUNFT (Kein Ergebnis)
+                    # Aufbau: Heim | Gast
+                    # Problem: Rechts ist oft leer oder "-" oder "v".
+                    
+                    # Wir schauen uns die Nachbarn an:
+                    # Nachbar RECHTS (my_team_idx + 1)
+                    right_val = row_text_list[my_team_idx + 1] if my_team_idx + 1 < len(cols) else ""
+                    # Nachbar LINKS (my_team_idx - 1)
+                    left_val = row_text_list[my_team_idx - 1] if my_team_idx > 0 else ""
+                    
+                    # Ist Rechts ein Teamname? (Länger als 2, keine Uhrzeit, keine reine Zahl für Halle)
+                    right_is_team = len(right_val) > 2 and not re.search(r'\d{1,2}:\d{2}', right_val) and not right_val.isdigit()
+                    
+                    # Ist Links ein Teamname? (Länger als 2, keine Uhrzeit, keine reine Zahl für Halle)
+                    left_is_team = len(left_val) > 2 and not re.search(r'\d{1,2}:\d{2}', left_val) and not left_val.isdigit()
 
+                    if right_is_team:
+                        # Rechts steht wer -> Ich bin HEIM
+                        heim = row_text_list[my_team_idx]
+                        gast = right_val
+                    elif left_is_team:
+                        # Links steht wer -> Ich bin GAST
+                        heim = left_val
+                        gast = row_text_list[my_team_idx]
+                    else:
+                        # Fallback (Passiert selten): Wir nehmen an wir sind Heim
+                        heim = row_text_list[my_team_idx]
+                        gast = right_val if right_val else "???"
+
+                # PDF Link
                 pdf_link = None
                 for link in row.find_all('a', href=True):
                     href = link['href'].lower()
@@ -237,12 +285,9 @@ def index():
                 tore_str = last_game['tore'].strip()
                 t_heim, t_gast = map(int, tore_str.split(':'))
                 we_home = last_game['we_are_home']
-                if t_heim == t_gast:
-                    traffic_light = 'draw'
-                elif we_home:
-                    traffic_light = 'win' if t_heim > t_gast else 'loss'
-                else: 
-                    traffic_light = 'win' if t_gast > t_heim else 'loss'
+                if t_heim == t_gast: traffic_light = 'draw'
+                elif we_home: traffic_light = 'win' if t_heim > t_gast else 'loss'
+                else: traffic_light = 'win' if t_gast > t_heim else 'loss'
             except: pass
 
         latest_results.append({
@@ -252,22 +297,14 @@ def index():
             'status': traffic_light
         })
 
-    # --- HIER PASSIERT DIE SORTIERUNG ---
-    
-    # Hilfsfunktion, um das Datum des letzten Spiels als echtes Datum zu bekommen
+    # SORTIERUNG: Erst Name, dann Datum (Neuestes oben)
     def get_last_game_date(item):
         if item['game'] and item['game'].get('datum'):
-            try:
-                return datetime.strptime(item['game']['datum'], "%d.%m.%Y")
-            except:
-                return datetime.min # Fallback (Ganz alt)
-        return datetime.min # Kein Spiel = ganz unten
+            try: return datetime.strptime(item['game']['datum'], "%d.%m.%Y")
+            except: return datetime.min 
+        return datetime.min
     
-    # 1. Erst alphabetisch sortieren (damit bei gleichem Datum A-Z gilt)
     latest_results.sort(key=lambda x: x['team'])
-    
-    # 2. Dann nach Datum ABSTEIGEND (Neuestes oben)
-    # Da Python-Sortierung "stabil" ist, bleibt die A-Z Reihenfolge bei gleichem Datum erhalten
     latest_results.sort(key=get_last_game_date, reverse=True)
 
     return render_template('index.html', latest_results=latest_results)
