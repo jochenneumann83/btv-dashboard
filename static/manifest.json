@@ -1,0 +1,17 @@
+{
+  "name": "BTV Handball Dashboard",
+  "short_name": "BTV Jugend",
+  "description": "Ergebnisse und Spielpläne der BTV Handball Jugend",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#FFD700",
+  "icons": [
+    {
+      "src": "/static/background.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
