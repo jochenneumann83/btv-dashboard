@@ -7,18 +7,10 @@ import re
 app = Flask(__name__)
 
 # Konfiguration der Teams, URLs und Filter
-# Format: "TeamName": ["URL", "Pflicht-Suchwort", "Verbotenes-Wort"]
-# Wenn "Pflicht" und "Verbot" None sind, gilt der Standard-Filter ("Birkesdorf" oder "BTV").
-
 TEAMS = {
     "mC-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424095", None, None],
-    
-    # wC1: Muss "Birkesdorf" haben, darf aber KEIN "II" im Namen haben.
     "wC1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", "Birkesdorf", "II"], 
-    
-    # wC2: Muss ZWINGEND "Birkesdorf II" heißen (damit "HC Weiden II" ignoriert wird).
     "wC2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", "Birkesdorf II", None],
-    
     "mD-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424301", None, None],
     "wD1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=425685", None, None],
     "wD2-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=425685", None, None],
@@ -54,11 +46,9 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                     continue
 
                 # --- ANKER SUCHEN (Uhrzeit) ---
-                # Wir suchen die Spalte mit der Uhrzeit (Format HH:MM).
                 time_index = -1
                 row_text_list = [c.get_text(strip=True) for c in cols]
                 
-                # Check ob Spalte 2 (lange Zeile) oder 0 (kurze Zeile) eine Uhrzeit ist
                 if len(cols) > 2 and re.match(r'^\d{2}:\d{2}$', row_text_list[2]):
                     time_index = 2
                     potential_date = row_text_list[1]
@@ -70,9 +60,7 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                 if time_index == -1:
                     continue
 
-                # --- DATEN LESEN ---
                 try:
-                    # Wir brauchen genug Spalten nach der Zeit
                     if len(cols) <= time_index + 5:
                         continue
                         
@@ -81,40 +69,45 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                     gast = row_text_list[time_index + 4]
                     tore = row_text_list[time_index + 5]
                     
-                    # --- INTELLIGENTE TEAM PRÜFUNG ---
+                    # --- TEAM CHECK ---
                     def check_team_match(name):
                         name_lower = name.lower()
-                        
-                        # 1. Include Check (Muss enthalten sein)
                         if filter_include:
-                            if filter_include.lower() not in name_lower:
-                                return False
+                            if filter_include.lower() not in name_lower: return False
                         else:
-                            # Standard: Birkesdorf oder BTV
-                            if "birkesdorf" not in name_lower and "btv" not in name_lower:
-                                return False
+                            if "birkesdorf" not in name_lower and "btv" not in name_lower: return False
                         
-                        # 2. Exclude Check (Darf NICHT enthalten sein)
                         if filter_exclude:
-                            if filter_exclude.lower() in name_lower:
-                                return False
-                        
+                            if filter_exclude.lower() in name_lower: return False
                         return True
 
-                    # Wir prüfen Heim UND Gast einzeln.
-                    # Wenn einer von beiden passt, wird das Spiel angezeigt.
                     match_heim = check_team_match(heim)
                     match_gast = check_team_match(gast)
                     
                     if not match_heim and not match_gast:
                         continue
-                    # -----------------------------
 
-                    # PDF
+                    # --- PDF / BERICHT LINK SUCHEN ---
                     pdf_link = None
                     for link in row.find_all('a', href=True):
                         href = link['href']
-                        if 'download' in href.lower() or 'pdf' in href.lower():
+                        href_lower = href.lower()
+                        
+                        is_report_link = False
+                        
+                        # 1. URL Keywords (JETZT ERWEITERT um 'nudokument')
+                        if 'download' in href_lower or 'pdf' in href_lower or 'meeting' in href_lower or 'nudokument' in href_lower:
+                            is_report_link = True
+                        
+                        # 2. Bild Check
+                        img = link.find('img')
+                        if img:
+                            alt_text = img.get('alt', '').lower()
+                            src_text = img.get('src', '').lower()
+                            if 'pdf' in alt_text or 'bericht' in alt_text or 'pdf' in src_text:
+                                is_report_link = True
+
+                        if is_report_link:
                             pdf_link = urljoin(url, href)
                             break 
 
