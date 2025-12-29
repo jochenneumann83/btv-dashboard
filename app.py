@@ -4,7 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import re
-from datetime import datetime # Wichtig für den Datums-Vergleich
+from datetime import datetime # Wichtig für Sortierung
 
 app = Flask(__name__)
 
@@ -133,7 +133,6 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                 if len(cols) > 2 and "." in row_text_list[1]:
                      if re.search(r'\d{1,2}\.\d{1,2}\.', row_text_list[1]):
                         raw_date = row_text_list[1]
-                        # Versuchen wir nur das Datum zu extrahieren (dd.mm.yyyy)
                         match = re.search(r'(\d{1,2}\.\d{1,2}\.\d{4})', raw_date)
                         if match:
                             current_date = match.group(1)
@@ -206,7 +205,7 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
 @cache.cached(timeout=180)
 def index():
     latest_results = []
-    today = datetime.now() # Heute
+    today = datetime.now()
     
     for team_name, config in TEAMS.items():
         url, include, exclude = config
@@ -216,22 +215,18 @@ def index():
         played_games = [g for g in games if ":" in g.get('tore', '')]
         last_game = played_games[-1] if played_games else None
         
-        # 2. Nächstes Spiel (Muss >= Heute sein)
+        # 2. Nächstes Spiel
         next_game = None
         for g in games:
             if ":" in g.get('tore', '') or "abges" in g.get('tore', '').lower():
                 continue
-            
             try:
                 g_date_str = g.get('datum', '')
                 if not g_date_str: continue
-                # Wir versuchen zu parsen
                 g_date = datetime.strptime(g_date_str, "%d.%m.%Y")
-                
-                # Check: Liegt das Datum in der Vergangenheit?
                 if g_date.date() >= today.date():
                     next_game = g
-                    break # Wir haben das nächste Spiel gefunden
+                    break
             except Exception:
                 continue
         
@@ -242,12 +237,11 @@ def index():
                 tore_str = last_game['tore'].strip()
                 t_heim, t_gast = map(int, tore_str.split(':'))
                 we_home = last_game['we_are_home']
-                
                 if t_heim == t_gast:
                     traffic_light = 'draw'
                 elif we_home:
                     traffic_light = 'win' if t_heim > t_gast else 'loss'
-                else: # we are guest
+                else: 
                     traffic_light = 'win' if t_gast > t_heim else 'loss'
             except: pass
 
@@ -257,6 +251,24 @@ def index():
             'next_game': next_game,
             'status': traffic_light
         })
+
+    # --- HIER PASSIERT DIE SORTIERUNG ---
+    
+    # Hilfsfunktion, um das Datum des letzten Spiels als echtes Datum zu bekommen
+    def get_last_game_date(item):
+        if item['game'] and item['game'].get('datum'):
+            try:
+                return datetime.strptime(item['game']['datum'], "%d.%m.%Y")
+            except:
+                return datetime.min # Fallback (Ganz alt)
+        return datetime.min # Kein Spiel = ganz unten
+    
+    # 1. Erst alphabetisch sortieren (damit bei gleichem Datum A-Z gilt)
+    latest_results.sort(key=lambda x: x['team'])
+    
+    # 2. Dann nach Datum ABSTEIGEND (Neuestes oben)
+    # Da Python-Sortierung "stabil" ist, bleibt die A-Z Reihenfolge bei gleichem Datum erhalten
+    latest_results.sort(key=get_last_game_date, reverse=True)
 
     return render_template('index.html', latest_results=latest_results)
 
