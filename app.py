@@ -1,4 +1,5 @@
 from flask import Flask, render_template
+from flask_caching import Cache
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
@@ -6,7 +7,12 @@ import re
 
 app = Flask(__name__)
 
-# Konfiguration der Teams
+# --- KONFIGURATION CACHE ---
+# Speichert Daten für 3 Minuten (180 Sekunden) im Arbeitsspeicher.
+# Das entlastet nuLiga und macht die Seite blitzschnell.
+cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache', 'CACHE_DEFAULT_TIMEOUT': 180})
+
+# --- TEAM KONFIGURATION ---
 TEAMS = {
     "mC-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424095", None, None],
     "wC1-Jugend": ["https://hnr-handball.liga.nu/cgi-bin/WebObjects/nuLigaHBDE.woa/wa/groupPage?championship=AD+25%2F26&group=424246", None, ["II", "2"]], 
@@ -23,6 +29,7 @@ HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
+# Hilfsfunktion (nicht cachen, da Parameter variabel)
 def scrape_games(url, filter_include=None, filter_exclude=None):
     games = []
     league_table = []
@@ -30,7 +37,7 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
     try:
         session = requests.Session()
         session.headers.update(HEADERS)
-        response = session.get(url, timeout=15)
+        response = session.get(url, timeout=10) # Timeout verkürzt für schnelleren Fail
         
         if response.status_code != 200:
             return [], []
@@ -38,7 +45,7 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
         soup = BeautifulSoup(response.text, 'html.parser')
         tables = soup.find_all('table', {'class': 'result-set'})
         
-        # --- TEAM MATCH LOGIK ---
+        # --- FILTER LOGIK ---
         def check_team_match(name):
             name_lower = name.lower()
             if "birkesdorf" not in name_lower and "btv" not in name_lower: return False
@@ -46,9 +53,7 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                 if isinstance(filter_include, list):
                     match_any = False
                     for item in filter_include:
-                        if item.lower() in name_lower:
-                            match_any = True
-                            break
+                        if item.lower() in name_lower: match_any = True
                     if not match_any: return False
                 else:
                     if filter_include.lower() not in name_lower: return False
@@ -65,18 +70,13 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
             header_text = "".join(headers)
             rows = table.find_all('tr')
 
-            # --- A: LIGA TABELLE ---
+            # --- A: TABELLE ---
             if "rang" in header_text and "punkte" in header_text:
-                
-                # Check: Haben wir Tore/Diff Spalten?
                 is_long_format = "tore" in header_text or "diff" in header_text
-
                 for row in rows:
                     cols = row.find_all('td')
-                    # Wir brauchen eine Mindestanzahl an Spalten (Short=ca 7, Long=ca 9)
                     if len(cols) >= 6:
                         try:
-                            # Rang reparieren
                             rang = cols[0].get_text(strip=True)
                             col_offset = 0
                             if not rang.isdigit():
@@ -85,7 +85,6 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                                     col_offset = 1
                             if not rang.isdigit(): continue
 
-                            # Mannschaft finden
                             possible_team_col = col_offset + 1
                             mannschaft = "Unbekannt"
                             if len(cols) > possible_team_col + 1:
@@ -98,9 +97,7 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                             else:
                                 mannschaft = cols[possible_team_col].get_text(strip=True)
 
-                            # WERTE AUSLESEN (Unterscheidung Lang/Kurz)
                             if is_long_format:
-                                # Standard: ... | S | U | N | Tore | Diff | Punkte
                                 punkte = cols[-1].get_text(strip=True)
                                 diff = cols[-2].get_text(strip=True)
                                 tore_val = cols[-3].get_text(strip=True)
@@ -109,29 +106,19 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                                 s_val = cols[-6].get_text(strip=True)
                                 spiele = cols[-7].get_text(strip=True)
                             else:
-                                # Kurz: ... | S | U | N | Punkte
                                 punkte = cols[-1].get_text(strip=True)
                                 n_val = cols[-2].get_text(strip=True)
                                 u_val = cols[-3].get_text(strip=True)
                                 s_val = cols[-4].get_text(strip=True)
                                 spiele = cols[-5].get_text(strip=True)
-                                # Dummies setzen
                                 diff = "-"
                                 tore_val = "-"
 
                             is_own = check_team_match(mannschaft)
-
                             league_table.append({
-                                'rang': rang,
-                                'mannschaft': mannschaft,
-                                'spiele': spiele,
-                                's': s_val,
-                                'u': u_val,
-                                'n': n_val,
-                                'tore': tore_val,
-                                'diff': diff,
-                                'punkte': punkte,
-                                'is_own': is_own
+                                'rang': rang, 'mannschaft': mannschaft, 'spiele': spiele,
+                                's': s_val, 'u': u_val, 'n': n_val, 'tore': tore_val,
+                                'diff': diff, 'punkte': punkte, 'is_own': is_own
                             })
                         except Exception: continue
                 continue 
@@ -145,11 +132,12 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                 time_index = -1
                 row_text_list = [c.get_text(strip=True) for c in cols]
                 
-                # Anker-Suche
+                # Datum suchen
                 if len(cols) > 2 and "." in row_text_list[1]:
                      if re.search(r'\d{1,2}\.\d{1,2}\.', row_text_list[1]):
                         current_date = row_text_list[1]
-
+                
+                # Zeit suchen (hh:mm)
                 for i, txt in enumerate(row_text_list):
                     if i > 5: break 
                     if re.search(r'\d{1,2}:\d{2}', txt):
@@ -157,9 +145,9 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                         break
                 
                 if time_index == -1: continue
-
                 zeit = row_text_list[time_index]
                 
+                # Team suchen
                 my_team_idx = -1
                 for i in range(time_index + 1, len(cols)):
                     txt = row_text_list[i]
@@ -173,9 +161,9 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                 gast = "???"
                 tore = "-"
                 
+                # Ergebnis Logik
                 has_next = (my_team_idx + 1 < len(cols))
                 next_val = row_text_list[my_team_idx + 1] if has_next else ""
-                
                 is_score = re.search(r'\d+:\d+', next_val) or "abges" in next_val.lower()
                 
                 if is_score:
@@ -188,27 +176,25 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                     if my_team_idx + 2 < len(cols):
                         tore = row_text_list[my_team_idx + 2]
 
+                # PDF Link
                 pdf_link = None
                 for link in row.find_all('a', href=True):
                     href = link['href'].lower()
                     is_report = False
-                    if 'download' in href or 'pdf' in href or 'meeting' in href or 'nudokument' in href:
-                        is_report = True
+                    if 'download' in href or 'pdf' in href or 'meeting' in href or 'nudokument' in href: is_report = True
                     img = link.find('img')
                     if img:
                         if 'pdf' in img.get('alt','').lower() or 'pdf' in img.get('src','').lower(): is_report = True
-                    
                     if is_report:
                         pdf_link = urljoin(url, link['href'])
                         break 
+                
+                # Ampel-Vorbereitung: Waren wir Heim?
+                we_are_home = check_team_match(heim)
 
                 games.append({
-                    'datum': current_date,
-                    'zeit': zeit,
-                    'heim': heim,
-                    'gast': gast,
-                    'tore': tore,
-                    'pdf': pdf_link
+                    'datum': current_date, 'zeit': zeit, 'heim': heim, 'gast': gast,
+                    'tore': tore, 'pdf': pdf_link, 'we_are_home': we_are_home
                 })
                 
     except Exception as e:
@@ -218,33 +204,56 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
     return games, league_table
 
 @app.route('/')
+@cache.cached(timeout=180) # Update alle 3 Min
 def index():
     latest_results = []
     
     for team_name, config in TEAMS.items():
         url, include, exclude = config
-        
         games, _ = scrape_games(url, filter_include=include, filter_exclude=exclude)
         
+        # 1. Letztes Spiel
         played_games = [g for g in games if ":" in g.get('tore', '')]
-        last_game = played_games[-1] if played_games else (games[0] if games else None)
-            
+        last_game = played_games[-1] if played_games else None
+        
+        # 2. Nächstes Spiel (das erste ohne Ergebnis)
+        next_game = None
+        for g in games:
+            if ":" not in g.get('tore', '') and "abges" not in g.get('tore', '').lower():
+                next_game = g
+                break
+        
+        # 3. Ampel Status
+        traffic_light = None # 'win', 'loss', 'draw'
+        if last_game and ":" in last_game['tore']:
+            try:
+                tore_str = last_game['tore'].strip()
+                t_heim, t_gast = map(int, tore_str.split(':'))
+                we_home = last_game['we_are_home']
+                
+                if t_heim == t_gast:
+                    traffic_light = 'draw'
+                elif we_home:
+                    traffic_light = 'win' if t_heim > t_gast else 'loss'
+                else: # we are guest
+                    traffic_light = 'win' if t_gast > t_heim else 'loss'
+            except: pass
+
         latest_results.append({
             'team': team_name,
-            'game': last_game
+            'game': last_game,
+            'next_game': next_game,
+            'status': traffic_light
         })
 
     return render_template('index.html', latest_results=latest_results)
 
 @app.route('/team/<team_name>')
+@cache.cached(timeout=180) # Update alle 3 Min
 def team_detail(team_name):
-    if team_name not in TEAMS:
-        return "Team nicht gefunden", 404
-    
+    if team_name not in TEAMS: return "Team nicht gefunden", 404
     url, include, exclude = TEAMS[team_name]
-    
     games, league_table = scrape_games(url, filter_include=include, filter_exclude=exclude)
-    
     return render_template('team.html', team_name=team_name, games=games, league_table=league_table)
 
 if __name__ == '__main__':
