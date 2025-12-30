@@ -36,9 +36,7 @@
                     
                     <div class="flex flex-col gap-1">
                         <div class="text-xs {{ 'text-btv-yellow font-bold' if item.game.we_are_home else 'text-gray-400' }} truncate team-name-line">{{ item.game.heim }}</div>
-                        
-                        <div class="text-center font-mono text-xl font-bold text-white py-1 js-score-value">{{ item.game.tore }}</div>
-                        
+                        <div class="text-center font-mono text-xl font-bold text-white py-1">{{ item.game.tore }}</div>
                         <div class="text-xs text-right {{ 'text-btv-yellow font-bold' if not item.game.we_are_home else 'text-gray-400' }} truncate team-name-line">{{ item.game.gast }}</div>
                     </div>
                     
@@ -61,4 +59,138 @@
                             </object>
                             {% endif %}
 
-                            <button onclick="shareTileFn(this)" class="flex
+                            <button onclick="shareTileFn(this)" class="flex items-center gap-1 px-2 py-0.5 rounded bg-btv-yellow/20 border border-btv-yellow/40 hover:bg-btv-yellow hover:text-black text-btv-yellow transition-colors" title="Ergebnis teilen">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="text-gray-600 italic text-center py-4 text-xs">Keine Spiele</p>
+                {% endif %}
+            </div>
+
+            {% if item.next_game %}
+            <div class="mt-auto pt-2 border-t border-gray-800/50">
+                <div class="flex items-center gap-2 mb-1">
+                    <div class="w-1 h-1 bg-btv-yellow rounded-full"></div>
+                    <span class="text-[0.6rem] text-gray-400 uppercase tracking-wider">Vorschau</span>
+                </div>
+                <a href="{{ url_for('team_detail', team_name=item.team) }}" class="text-xs text-gray-300 truncate hover:text-btv-yellow transition-colors block">
+                    <span class="text-gray-500 text-[0.65rem] mr-1">{{ item.next_game.datum }} {{ item.next_game.zeit }}</span> 
+                    vs {{ item.next_game.gast if item.next_game.we_are_home else item.next_game.heim }}
+                </a>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div id="share-staging-area" style="position: fixed; left: -9999px; top: 0; width: 500px; background-color: #1a1a1a; padding: 25px; border-radius: 12px; border: 2px solid #FFD700;">
+    
+    <div class="mb-4 flex items-center gap-4 border-b border-gray-700 pb-4">
+        <img src="{{ url_for('static', filename='background.png') }}" class="h-12 w-auto shadow-lg rounded-full bg-black/50 p-1" alt="BTV Logo">
+        <div>
+            <h2 class="text-2xl font-bold text-white uppercase tracking-tighter leading-none">Ergebnisdienst</h2>
+            <p class="text-btv-yellow text-xs uppercase tracking-[0.2em] mt-1">Birkesdorfer TV</p>
+        </div>
+    </div>
+
+    <div id="share-content-target"></div>
+
+    <div class="mt-5 pt-3 border-t border-gray-800 text-center">
+        <p class="text-sm font-bold text-btv-yellow mb-1">#nurderbtv #zukunftbrauchtjugend</p>
+        <p class="text-[0.7rem] text-gray-500 font-mono">@btv1864jugend</p>
+    </div>
+</div>
+
+<script>
+    async function shareTileFn(button) {
+        if (!navigator.share || !navigator.canShare) {
+            alert("Dein Browser unterstützt das Teilen nicht. Bitte Screenshot manuell erstellen.");
+            return;
+        }
+
+        const btnOriginalText = button.innerHTML;
+        button.innerHTML = '<svg class="animate-spin h-3 w-3 text-btv-yellow" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+        button.disabled = true;
+
+        try {
+            const tileWrapper = button.closest('.js-tile-to-share');
+            const contentToClone = tileWrapper.querySelector('.tile-content-area');
+            const teamName = tileWrapper.querySelector('h2').innerText;
+
+            const target = document.getElementById('share-content-target');
+            target.innerHTML = ''; 
+            
+            // Team Name
+            const teamHeader = document.createElement('h3');
+            teamHeader.innerText = teamName;
+            teamHeader.className = 'text-white font-black text-3xl mb-4 text-center tracking-tight border-b-2 border-btv-yellow/20 pb-2';
+            target.appendChild(teamHeader);
+
+            // Clone
+            const clone = contentToClone.cloneNode(true);
+            
+            // --- FIX FÜR ABGESCHNITTENEN TEXT ---
+            // 1. Buttons entfernen
+            clone.querySelectorAll('button, a, object').forEach(el => el.remove());
+            
+            // 2. 'truncate' entfernen, damit lange Namen umbrechen können
+            clone.querySelectorAll('.truncate').forEach(el => el.classList.remove('truncate'));
+            
+            // 3. 'h-full' und andere einschränkende Klassen entfernen
+            clone.classList.remove('h-full', 'flex-grow', 'bg-black/60', 'border-white/5');
+            
+            // 4. Neues Styling für das Bild
+            clone.classList.add('bg-black/40', 'border', 'border-btv-yellow/20', 'p-6', 'rounded-xl');
+            
+            // 5. Schriftgrößen im Klon anpassen (damit es auf dem Bild gut lesbar ist)
+            // Heim/Gast größer machen
+            clone.querySelectorAll('.team-name-line').forEach(el => {
+                el.classList.replace('text-xs', 'text-lg'); // Größer
+                el.classList.add('leading-tight'); // Zeilenabstand anpassen
+            });
+            // Ergebnis riesig machen
+            const scoreEl = clone.querySelector('.text-4xl, .text-xl'); // Je nachdem was da ist
+            if(scoreEl) {
+                scoreEl.classList.replace('text-xl', 'text-5xl');
+                scoreEl.classList.add('py-4');
+            }
+
+            target.appendChild(clone);
+
+            // Screenshot erstellen
+            const stagingArea = document.getElementById('share-staging-area');
+            const canvas = await html2canvas(stagingArea, {
+                scale: 2.5, // Hohe Auflösung
+                backgroundColor: '#1a1a1a',
+                useCORS: true, 
+                logging: false
+            });
+
+            canvas.toBlob(async (blob) => {
+                const file = new File([blob], `btv-ergebnis-${teamName.trim()}.png`, { type: 'image/png' });
+                if (navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: 'BTV Ergebnis: ' + teamName,
+                        text: `#nurderbtv - Ergebnis der ${teamName}`
+                    });
+                }
+            }, 'image/png');
+
+        } catch (err) {
+            console.error(err);
+            alert("Fehler beim Teilen.");
+        } finally {
+             button.innerHTML = btnOriginalText;
+             button.disabled = false;
+        }
+    }
+</script>
+
+{% endblock %}
