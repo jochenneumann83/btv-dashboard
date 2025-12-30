@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, redirect, url_for
 from flask_caching import Cache
 import requests
 from bs4 import BeautifulSoup
@@ -93,7 +93,6 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                 if t_idx == -1: continue
 
                 # Team finden (DYNAMISCH & Derby-Safe)
-                # Wir suchen alle Indizes, die "Birkesdorf" enthalten
                 potential_indices = [i for i, txt in enumerate(row_texts) if check_team_match(txt)]
                 if not potential_indices: continue
                 
@@ -109,8 +108,6 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                 
                 if score_idx != -1: # SPIEL VORBEI
                     tore = row_texts[score_idx]
-                    # Wenn ich direkt vor dem Ergebnis stehe, bin ich GAST (nuLiga: Heim | Gast | Tore)
-                    # ABER: Manchmal ist eine Spalte dazwischen. Wir prüfen den Nachbarn.
                     if score_idx == my_idx + 1:
                         gast, heim = row_texts[my_idx], row_texts[my_idx-1]
                         we_home = False
@@ -119,15 +116,16 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                         we_home = True
                 else: # ZUKUNFT
                     tore = "-"
-                    # Suche den anderen Teamnamen in der Nähe (Heim | Gast)
-                    # Wir schauen ob links oder rechts von uns ein Team steht
                     left_n = row_texts[my_idx-1] if my_idx > 0 else ""
                     right_n = row_texts[my_idx+1] if my_idx+1 < len(row_texts) else ""
                     
-                    if len(right_n) > 3 and not any(char.isdigit() for char in right_n[:2]):
-                        heim, gast, we_home = row_texts[my_idx], right_n, True
-                    else:
+                    # --- HIER IST DER FIX FÜR "LAMM" / HC EYNATTEN ---
+                    # Wir prüfen ZUERST links. Wenn da ein sinnvoller Text steht (kein Datum, keine Uhrzeit), ist das der Gegner.
+                    if len(left_n) > 3 and ":" not in left_n and not left_n.strip().isdigit():
                         heim, gast, we_home = left_n, row_texts[my_idx], False
+                    else:
+                        # Wenn links nichts ist, muss der Gegner rechts sein
+                        heim, gast, we_home = row_texts[my_idx], right_n, True
 
                 pdf = None
                 for a in row.find_all('a', href=True):
@@ -169,4 +167,4 @@ def team_detail(team_name):
     return render_template('team.html', team_name=team_name, games=g, league_table=t)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
