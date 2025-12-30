@@ -36,7 +36,9 @@
                     
                     <div class="flex flex-col gap-1">
                         <div class="text-xs {{ 'text-btv-yellow font-bold' if item.game.we_are_home else 'text-gray-400' }} truncate team-name-line">{{ item.game.heim }}</div>
-                        <div class="text-center font-mono text-xl font-bold text-white py-1">{{ item.game.tore }}</div>
+                        
+                        <div class="text-center font-mono text-xl font-bold text-white py-1 js-score-value">{{ item.game.tore }}</div>
+                        
                         <div class="text-xs text-right {{ 'text-btv-yellow font-bold' if not item.game.we_are_home else 'text-gray-400' }} truncate team-name-line">{{ item.game.gast }}</div>
                     </div>
                     
@@ -140,44 +142,4 @@
                 el.classList.add('leading-tight');
             });
 
-            // HIER IST DIE ÄNDERUNG FÜR DAS GROSSE ERGEBNIS:
-            const scoreEl = clone.querySelector('.text-4xl, .text-xl'); 
-            if(scoreEl) {
-                // Alte Größenklassen entfernen
-                scoreEl.classList.remove('text-xl', 'text-4xl');
-                // Neue RIESIGE Größe (text-7xl) hinzufügen
-                scoreEl.classList.add('text-7xl', 'py-6');
-            }
-
-            target.appendChild(clone);
-
-            const stagingArea = document.getElementById('share-staging-area');
-            const canvas = await html2canvas(stagingArea, {
-                scale: 2.5,
-                backgroundColor: '#1a1a1a',
-                useCORS: true, 
-                logging: false
-            });
-
-            canvas.toBlob(async (blob) => {
-                const file = new File([blob], `btv-ergebnis-${teamName.trim()}.png`, { type: 'image/png' });
-                if (navigator.canShare({ files: [file] })) {
-                    await navigator.share({
-                        files: [file],
-                        title: 'BTV Ergebnis: ' + teamName,
-                        text: `#nurderbtv - Ergebnis der ${teamName}`
-                    });
-                }
-            }, 'image/png');
-
-        } catch (err) {
-            console.error(err);
-            alert("Fehler beim Teilen.");
-        } finally {
-             button.innerHTML = btnOriginalText;
-             button.disabled = false;
-        }
-    }
-</script>
-
-{% endblock %}
+            // ---
