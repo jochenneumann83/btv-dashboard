@@ -9,7 +9,7 @@
         </svg>
     </a>
     <div>
-        <h1 class="text-2xl font-bold text-btv-yellow uppercase tracking-tight">{{ team_name }}</h1>
+        <h1 class="text-2xl font-bold text-btv-yellow tracking-tight">{{ team_name }}</h1>
     </div>
 </div>
 
@@ -17,35 +17,34 @@
 <div class="mb-8">
     <h2 class="text-white text-sm uppercase tracking-widest mb-3 border-l-4 border-btv-yellow pl-3">Tabelle</h2>
     <div class="bg-btv-darkgray/95 backdrop-blur-sm rounded-lg overflow-hidden border border-gray-800 shadow-xl overflow-x-auto">
-        <table class="w-full text-left border-collapse min-w-[600px]"> <thead>
-                <tr class="bg-black/60 text-gray-400 text-[0.65rem] uppercase tracking-wider border-b border-gray-700">
-                    <th class="p-3 text-center">#</th>
-                    <th class="p-3 w-1/3">Mannschaft</th>
-                    <th class="p-3 text-center">Sp</th>
-                    <th class="p-3 text-center">S</th>
-                    <th class="p-3 text-center">U</th>
-                    <th class="p-3 text-center">N</th>
-                    <th class="p-3 text-center">Tore</th>
-                    <th class="p-3 text-center">Diff</th>
-                    <th class="p-3 text-center font-bold text-white">Pkt</th>
+        <table class="w-full text-left border-collapse min-w-[600px]">
+            <thead>
+                <tr class="bg-white/5 text-gray-400 text-xs uppercase border-b border-gray-700">
+                    <th class="p-3 font-semibold w-10 text-center">#</th>
+                    <th class="p-3 font-semibold">Team</th>
+                    <th class="p-3 font-semibold text-center w-12">SP</th>
+                    <th class="p-3 font-semibold text-center w-12">S</th>
+                    <th class="p-3 font-semibold text-center w-12">U</th>
+                    <th class="p-3 font-semibold text-center w-12">N</th>
+                    <th class="p-3 font-semibold text-center w-24">Tore</th>
+                    <th class="p-3 font-semibold text-center w-16">Diff</th>
+                    <th class="p-3 font-semibold text-center w-16">Pkt</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-gray-800/50 text-xs">
+            <tbody class="text-sm divide-y divide-gray-800">
                 {% for row in league_table %}
-                <tr class="hover:bg-white/5 transition-colors {{ 'bg-yellow-900/10' if row.is_own else '' }}">
-                    <td class="p-3 text-center text-gray-500">{{ row.rang }}</td>
-                    
-                    <td class="p-3 font-medium {{ 'text-btv-yellow font-bold text-sm' if row.is_own else 'text-gray-300' }}">
-                        {{ row.mannschaft }}
+                <tr class="hover:bg-white/5 transition-colors {{ 'bg-white/10' if row.is_us else '' }}">
+                    <td class="p-3 text-center font-mono text-gray-500">{{ row.rang }}</td>
+                    <td class="p-3 font-medium {{ 'text-btv-yellow' if row.is_us else 'text-gray-200' }}">
+                        {{ row.team }}
                     </td>
-                    
                     <td class="p-3 text-center text-gray-400">{{ row.spiele }}</td>
-                    <td class="p-3 text-center text-gray-500">{{ row.s }}</td>
-                    <td class="p-3 text-center text-gray-500">{{ row.u }}</td>
-                    <td class="p-3 text-center text-gray-500">{{ row.n }}</td>
-                    <td class="p-3 text-center text-gray-400">{{ row.tore }}</td>
+                    <td class="p-3 text-center text-gray-400">{{ row.s }}</td>
+                    <td class="p-3 text-center text-gray-400">{{ row.u }}</td>
+                    <td class="p-3 text-center text-gray-400">{{ row.n }}</td>
+                    <td class="p-3 text-center font-mono text-gray-400">{{ row.tore }}</td>
                     <td class="p-3 text-center text-gray-500">{{ row.diff }}</td>
-                    <td class="p-3 text-center font-bold {{ 'text-btv-yellow' if row.is_own else 'text-white' }}">{{ row.punkte }}</td>
+                    <td class="p-3 text-center font-bold text-white">{{ row.punkte }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -54,70 +53,110 @@
 </div>
 {% endif %}
 
-<div>
-    <h2 class="text-white text-sm uppercase tracking-widest mb-3 border-l-4 border-btv-yellow pl-3">Spielplan</h2>
-    <div class="bg-btv-darkgray/95 backdrop-blur-sm rounded-lg overflow-hidden border border-gray-800 shadow-xl">
-        <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="bg-black/60 text-gray-400 text-[0.65rem] uppercase tracking-wider border-b border-gray-700">
-                        <th class="p-3">Datum</th>
-                        <th class="p-3 hidden md:table-cell">Zeit</th>
-                        <th class="p-3 text-right">Heim</th>
-                        <th class="p-3 text-center w-6"></th>
-                        <th class="p-3">Gast</th>
-                        <th class="p-3 text-center">Ergebnis</th>
-                        <th class="p-3 text-center">PDF</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-800/50">
-                    {% for game in games %}
-                    <tr class="hover:bg-white/5 transition-colors group">
-                        <td class="p-3 text-xs whitespace-nowrap text-gray-300">
-                            {{ game.datum }}
-                            <span class="md:hidden block text-[0.6rem] text-gray-500">{{ game.zeit }}</span>
-                        </td>
-                        <td class="p-3 text-xs text-gray-500 hidden md:table-cell">{{ game.zeit }}</td>
-                        
-                        <td class="p-3 text-sm text-right {{ 'text-btv-yellow font-bold' if ('Birkesdorf' in game.heim or 'BTV' in game.heim) else 'text-white' }}">
-                            {{ game.heim }}
-                        </td>
-                        
-                        <td class="p-3 text-gray-700 text-[0.6rem] text-center">vs</td>
-                        
-                        <td class="p-3 text-sm {{ 'text-btv-yellow font-bold' if ('Birkesdorf' in game.gast or 'BTV' in game.gast) else 'text-white' }}">
-                            {{ game.gast }}
-                        </td>
-                        
-                        <td class="p-3 text-center">
-                            {% if ':' in game.tore %}
-                                <span class="inline-block px-2 py-0.5 bg-gray-800 group-hover:bg-btv-yellow group-hover:text-black transition-colors rounded text-white font-mono text-sm font-bold border border-gray-700">
-                                    {{ game.tore }}
-                                </span>
-                            {% else %}
-                                <span class="text-gray-700 text-xs">-</span>
-                            {% endif %}
-                        </td>
-                        
-                        <td class="p-3 text-center">
-                            {% if game.pdf %}
-                            <a href="{{ game.pdf }}" target="_blank" class="inline-flex items-center justify-center w-6 h-6 rounded bg-red-900/40 text-red-400 hover:bg-red-600 hover:text-white border border-red-900/50 hover:border-red-500 transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                </svg>
-                            </a>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="p-6 text-center text-gray-500 text-sm">Keine Spiele gefunden.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+{% if games %}
+<div class="mb-8">
+    <h2 class="text-white text-sm uppercase tracking-widest mb-3 border-l-4 border-btv-yellow pl-3">Spielplan BTV</h2>
+    <div class="bg-btv-darkgray/95 backdrop-blur-sm rounded-lg overflow-hidden border border-gray-800 shadow-xl overflow-x-auto">
+        <table class="w-full text-left border-collapse min-w-[600px]">
+            <thead>
+                <tr class="bg-white/5 text-gray-400 text-xs uppercase border-b border-gray-700">
+                    <th class="p-3 font-semibold w-24">Datum</th>
+                    <th class="p-3 font-semibold w-16">Zeit</th>
+                    <th class="p-3 font-semibold text-right w-1/3">Heim</th>
+                    <th class="p-3 font-semibold text-center w-16">Erg.</th>
+                    <th class="p-3 font-semibold w-1/3">Gast</th>
+                    <th class="p-3 font-semibold text-center w-10">info</th>
+                </tr>
+            </thead>
+            <tbody class="text-sm divide-y divide-gray-800">
+                {% for game in games %}
+                <tr class="hover:bg-white/5 transition-colors group">
+                    <td class="p-3 text-gray-400 whitespace-nowrap">{{ game.datum }}</td>
+                    <td class="p-3 text-gray-400">{{ game.zeit }}</td>
+                    
+                    <td class="p-3 text-right font-medium {{ 'text-btv-yellow' if game.we_are_home else 'text-gray-200' }} truncate max-w-[150px]">
+                        {{ game.heim }}
+                    </td>
+                    
+                    <td class="p-3 text-center font-bold text-white tracking-wider bg-black/20">
+                        {% if game.tore and ':' in game.tore %}
+                            <span class="
+                                {% set h, g = game.tore.split(':')|map('int') %}
+                                {% if game.we_are_home %}
+                                    {{ 'text-green-500' if h > g else 'text-red-500' if g > h else 'text-gray-400' }}
+                                {% else %}
+                                    {{ 'text-green-500' if g > h else 'text-red-500' if h > g else 'text-gray-400' }}
+                                {% endif %}
+                            ">
+                                {{ game.tore }}
+                            </span>
+                        {% else %}
+                            <span class="text-gray-700 text-xs">-</span>
+                        {% endif %}
+                    </td>
+
+                    <td class="p-3 font-medium {{ 'text-btv-yellow' if not game.we_are_home else 'text-gray-200' }} truncate max-w-[150px]">
+                        {{ game.gast }}
+                    </td>
+                    
+                    <td class="p-3 text-center">
+                        {% if game.pdf %}
+                        <a href="{{ game.pdf }}" target="_blank" class="inline-flex items-center justify-center w-6 h-6 rounded bg-red-900/40 text-red-400 hover:bg-red-600 hover:text-white border border-red-900/50 hover:border-red-500 transition-all">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
+{% endif %}
+
+{% if other_games %}
+<div class="mb-8 opacity-80 hover:opacity-100 transition-opacity">
+    <h2 class="text-gray-400 text-sm uppercase tracking-widest mb-3 border-l-4 border-gray-600 pl-3">Sonstige Spiele</h2>
+    <div class="bg-btv-darkgray/50 backdrop-blur-sm rounded-lg overflow-hidden border border-gray-800 shadow-lg overflow-x-auto grayscale-[0.3] hover:grayscale-0 transition-all">
+        <table class="w-full text-left border-collapse min-w-[600px]">
+            <thead>
+                <tr class="bg-white/5 text-gray-500 text-xs uppercase border-b border-gray-700">
+                    <th class="p-3 font-semibold w-24">Datum</th>
+                    <th class="p-3 font-semibold w-16">Zeit</th>
+                    <th class="p-3 font-semibold text-right w-1/3">Heim</th>
+                    <th class="p-3 font-semibold text-center w-16">Erg.</th>
+                    <th class="p-3 font-semibold w-1/3">Gast</th>
+                    <th class="p-3 font-semibold text-center w-10"></th>
+                </tr>
+            </thead>
+            <tbody class="text-sm divide-y divide-gray-800">
+                {% for game in other_games %}
+                <tr class="hover:bg-white/5 transition-colors">
+                    <td class="p-3 text-gray-500 whitespace-nowrap">{{ game.datum }}</td>
+                    <td class="p-3 text-gray-500">{{ game.zeit }}</td>
+                    
+                    <td class="p-3 text-right font-medium text-gray-400 truncate max-w-[150px]">
+                        {{ game.heim }}
+                    </td>
+                    
+                    <td class="p-3 text-center font-bold text-gray-400 tracking-wider bg-black/10">
+                        {{ game.tore if ':' in game.tore else '-' }}
+                    </td>
+
+                    <td class="p-3 font-medium text-gray-400 truncate max-w-[150px]">
+                        {{ game.gast }}
+                    </td>
+                    
+                    <td class="p-3 text-center">
+                        </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 
 {% endblock %}
