@@ -26,20 +26,9 @@
     </script>
 
     <style>
-        body { 
-            background-color: #050505; 
-            color: #ffffff; 
-            min-height: 100vh; 
-            display: flex; 
-            flex-direction: column; 
-        }
-        .logo-glow { 
-            filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.3)); 
-            transition: filter 0.3s;
-        }
-        .logo-glow:hover {
-            filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.6));
-        }
+        body { background-color: #050505; color: #ffffff; min-height: 100vh; display: flex; flex-direction: column; }
+        .logo-glow { filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.3)); transition: filter 0.3s; }
+        .logo-glow:hover { filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.6)); }
     </style>
 
     <script>
@@ -47,7 +36,6 @@
             e.preventDefault();
             const banner = document.getElementById('install-banner');
             const text = document.getElementById('install-text');
-            
             if (banner && text) {
                 banner.style.display = 'block';
                 text.innerText = "Installiere die App für schnelleren Zugriff!";
@@ -73,7 +61,6 @@
                 <span class="font-bold text-xl tracking-widest text-white group-hover:text-btv-yellow uppercase transition-colors">BTV DASHBOARD</span>
                 <span class="text-[0.6rem] text-gray-400 uppercase tracking-[0.2em] group-hover:text-gray-300">Handball-Jugend</span>
             </a>
-            
             <a href="/">
                 <img src="{{ url_for('static', filename='background.png') }}" alt="BTV" class="h-10 w-auto logo-glow">
             </a>
@@ -83,10 +70,6 @@
     <main class="container mx-auto p-4 flex-grow w-full max-w-7xl">
         {% block content %}{% endblock %}
     </main>
-
-    <footer class="mt-auto py-8 text-center border-t border-gray-900 bg-black/50">
-        <p class="text-gray-600 text-xs uppercase tracking-widest">&copy; 2025 Birkesdorfer TV</p>
-    </footer>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
