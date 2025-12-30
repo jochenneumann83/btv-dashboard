@@ -92,15 +92,13 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                         break
                 if t_idx == -1: continue
 
-                # Team finden (DYNAMISCH & Derby-Safe)
-                # Wir suchen alle Indizes, die "Birkesdorf" enthalten
+                # Team finden
                 potential_indices = [i for i, txt in enumerate(row_texts) if check_team_match(txt)]
                 if not potential_indices: continue
                 
-                # Wir nehmen den Index, der am weitesten links steht, aber nach der Zeit kommt
                 my_idx = potential_indices[0]
                 
-                # Checke ob Ergebnis existiert
+                # Ergebnis check
                 score_idx = -1
                 for i in range(my_idx, len(row_texts)):
                     if re.search(r'\d+:\d+', row_texts[i]):
@@ -109,8 +107,6 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                 
                 if score_idx != -1: # SPIEL VORBEI
                     tore = row_texts[score_idx]
-                    # Wenn ich direkt vor dem Ergebnis stehe, bin ich GAST (nuLiga: Heim | Gast | Tore)
-                    # ABER: Manchmal ist eine Spalte dazwischen. Wir prüfen den Nachbarn.
                     if score_idx == my_idx + 1:
                         gast, heim = row_texts[my_idx], row_texts[my_idx-1]
                         we_home = False
@@ -119,15 +115,15 @@ def scrape_games(url, filter_include=None, filter_exclude=None):
                         we_home = True
                 else: # ZUKUNFT
                     tore = "-"
-                    # Suche den anderen Teamnamen in der Nähe (Heim | Gast)
-                    # Wir schauen ob links oder rechts von uns ein Team steht
                     left_n = row_texts[my_idx-1] if my_idx > 0 else ""
                     right_n = row_texts[my_idx+1] if my_idx+1 < len(row_texts) else ""
                     
-                    if len(right_n) > 3 and not any(char.isdigit() for char in right_n[:2]):
-                        heim, gast, we_home = row_texts[my_idx], right_n, True
+                    # --- FIX FÜR LAMM / HC EYNATTEN ---
+                    # Wir prüfen erst links. Wenn da Text steht und keine Uhrzeit, ist das der Gegner.
+                    if left_n and ":" not in left_n:
+                         heim, gast, we_home = left_n, row_texts[my_idx], False
                     else:
-                        heim, gast, we_home = left_n, row_texts[my_idx], False
+                         heim, gast, we_home = row_texts[my_idx], right_n, True
 
                 pdf = None
                 for a in row.find_all('a', href=True):
@@ -159,7 +155,8 @@ def index():
         res.append({'team': team, 'game': last, 'next_game': nxt, 'status': status})
     
     res.sort(key=lambda x: x['team'])
-    res.sort(key=lambda x: datetime.strptime(x['game']['datum'], "%d.%m.%Y") if x['game'] else datetime.min, reverse=True)
+    # Optional: Nach Datum sortieren
+    # res.sort(key=lambda x: datetime.strptime(x['game']['datum'], "%d.%m.%Y") if x['game'] else datetime.min, reverse=True)
     return render_template('index.html', latest_results=res)
 
 @app.route('/team/<team_name>')
@@ -169,4 +166,4 @@ def team_detail(team_name):
     return render_template('team.html', team_name=team_name, games=g, league_table=t)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
