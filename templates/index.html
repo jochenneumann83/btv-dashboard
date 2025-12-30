@@ -4,7 +4,7 @@
 
 <header class="mb-6 border-l-4 border-btv-yellow pl-4 flex justify-between items-end">
     <div>
-        <h1 class="text-3xl font-bold text-white uppercase tracking-tighter">Ergebnisse</h1>
+        <h1 id="page-title-for-share" class="text-3xl font-bold text-white uppercase tracking-tighter">Ergebnisse</h1>
         <p class="text-gray-400 text-sm">Aktueller Spieltag im Überblick</p>
     </div>
     <div class="text-[0.6rem] text-gray-600 font-mono">Live: 3 Min</div>
@@ -12,17 +12,17 @@
 
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
     {% for item in latest_results %}
-    <a href="{{ url_for('team_detail', team_name=item.team) }}" class="block group relative">
+    <div class="block group relative js-tile-to-share h-full">
         <div class="bg-btv-darkgray/90 backdrop-blur-sm border border-gray-800 rounded-lg p-4 hover:border-btv-yellow/60 hover:shadow-[0_0_15px_rgba(255,215,0,0.1)] transition-all duration-300 h-full flex flex-col justify-between">
             
-            <div class="flex justify-between items-center mb-3">
+            <a href="{{ url_for('team_detail', team_name=item.team) }}" class="flex justify-between items-center mb-3">
                 <h2 class="text-lg font-bold text-white group-hover:text-btv-yellow truncate">{{ item.team }}</h2>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-600 group-hover:text-btv-yellow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                 </svg>
-            </div>
+            </a>
 
-            <div class="bg-black/60 rounded p-3 mb-2 border border-white/5 relative flex-grow">
+            <div class="bg-black/60 rounded p-3 mb-2 border border-white/5 relative flex-grow tile-content-area">
                 {% if item.status %}
                     <div class="absolute top-3 right-3 w-3 h-3 rounded-full border border-black/30
                         {% if item.status == 'win' %} bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]
@@ -47,16 +47,24 @@
                             {{ item.game.zeit }} Uhr
                         </p>
                         
-                        {% if item.game.pdf %}
-                        <object>
-                            <a href="{{ item.game.pdf }}" target="_blank" class="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/30 border border-red-900/50 hover:bg-red-600 hover:text-white text-red-400 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        <div class="flex gap-2">
+                            {% if item.game.pdf %}
+                            <object>
+                                <a href="{{ item.game.pdf }}" target="_blank" class="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/30 border border-red-900/50 hover:bg-red-600 hover:text-white text-red-400 transition-colors">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <span class="text-[0.6rem] font-bold uppercase tracking-tighter">Bericht</span>
+                                </a>
+                            </object>
+                            {% endif %}
+
+                            <button onclick="shareTileFn(this)" class="flex items-center gap-1 px-2 py-0.5 rounded bg-btv-yellow/20 border border-btv-yellow/40 hover:bg-btv-yellow hover:text-black text-btv-yellow transition-colors" title="Ergebnis teilen">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                                 </svg>
-                                <span class="text-[0.6rem] font-bold uppercase tracking-tighter">Bericht</span>
-                            </a>
-                        </object>
-                        {% endif %}
+                            </button>
+                        </div>
                     </div>
                 {% else %}
                     <p class="text-gray-600 italic text-center py-4 text-xs">Keine Spiele</p>
@@ -69,15 +77,101 @@
                     <div class="w-1 h-1 bg-btv-yellow rounded-full"></div>
                     <span class="text-[0.6rem] text-gray-400 uppercase tracking-wider">Vorschau</span>
                 </div>
-                <div class="text-xs text-gray-300 truncate">
+                <a href="{{ url_for('team_detail', team_name=item.team) }}" class="text-xs text-gray-300 truncate hover:text-btv-yellow transition-colors block">
                     <span class="text-gray-500 text-[0.65rem] mr-1">{{ item.next_game.datum }} {{ item.next_game.zeit }}</span> 
                     vs {{ item.next_game.gast if item.next_game.we_are_home else item.next_game.heim }}
-                </div>
+                </a>
             </div>
             {% endif %}
+
         </div>
-    </a>
+    </div>
     {% endfor %}
 </div>
+
+
+<div id="share-staging-area" style="position: fixed; left: -9999px; top: 0; width: 400px; background-color: #1a1a1a; padding: 20px; border-radius: 12px; border: 2px solid #FFD700;">
+    <div class="mb-4 flex items-center gap-3 border-b border-gray-700 pb-3">
+        <div class="h-8 w-8 bg-btv-yellow rounded-full flex items-center justify-center font-bold text-black">BTV</div>
+        <h2 class="text-xl font-bold text-white uppercase tracking-tighter">Ergebnisdienst</h2>
+    </div>
+    <div id="share-content-target"></div>
+    <div class="mt-3 text-center text-[0.6rem] text-gray-500 font-mono">birkesdorfer-tv.de</div>
+</div>
+
+
+<script>
+    async function shareTileFn(button) {
+        // 1. Prüfen, ob der Browser Teilen unterstützt
+        if (!navigator.share || !navigator.canShare) {
+            alert("Dein Browser unterstützt das native Teilen von Bildern leider nicht. Versuche es auf einem Smartphone.");
+            return;
+        }
+
+        const btnOriginalText = button.innerHTML;
+        button.innerHTML = '<svg class="animate-spin h-3 w-3 text-btv-yellow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+        button.disabled = true;
+
+        try {
+            // 2. Die Kachel finden
+            const tileWrapper = button.closest('.js-tile-to-share');
+            const contentToClone = tileWrapper.querySelector('.tile-content-area');
+            const teamName = tileWrapper.querySelector('h2').innerText;
+
+            // 3. Staging Area vorbereiten (Inhalt kopieren)
+            const target = document.getElementById('share-content-target');
+            target.innerHTML = ''; // Leeren
+            
+            // Teamname als Überschrift hinzufügen
+            const teamHeader = document.createElement('h3');
+            teamHeader.innerText = teamName;
+            teamHeader.className = 'text-btv-yellow font-bold text-lg mb-2 text-center';
+            target.appendChild(teamHeader);
+
+            // Klonen und einfügen
+            const clone = contentToClone.cloneNode(true);
+            // Buttons im Klon entfernen, die brauchen wir nicht auf dem Bild
+            const buttonsInClone = clone.querySelectorAll('button, a, object');
+            buttonsInClone.forEach(btn => btn.remove());
+            
+            // Styling des Klons anpassen für das Bild
+            clone.classList.remove('bg-black/60', 'border-white/5');
+            clone.classList.add('bg-black/40', 'border-btv-yellow/20');
+
+            target.appendChild(clone);
+
+            // 4. Screenshot machen mit html2canvas
+            const stagingArea = document.getElementById('share-staging-area');
+            const canvas = await html2canvas(stagingArea, {
+                scale: 2, // Für scharfe Bilder auf Retina-Displays
+                backgroundColor: '#1a1a1a', // Hintergrundfarbe erzwingen
+                useCORS: true, // Wichtig, falls externe Bilder geladen werden
+                logging: false
+            });
+
+            // 5. Canvas in ein Bild-Datei (Blob) umwandeln
+            canvas.toBlob(async (blob) => {
+                // 6. Über die Web Share API teilen
+                const file = new File([blob], `ergebnis-${teamName.replace(/\s+/g, '-').toLowerCase()}.png`, { type: 'image/png' });
+
+                if (navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: 'Spielergebnis ' + teamName,
+                        text: `Das aktuelle Ergebnis der ${teamName}.`
+                    });
+                }
+            }, 'image/png');
+
+        } catch (err) {
+            console.error("Fehler beim Teilen:", err);
+            alert("Es gab einen Fehler beim Erstellen des Bildes.");
+        } finally {
+             // Button zurücksetzen
+             button.innerHTML = btnOriginalText;
+             button.disabled = false;
+        }
+    }
+</script>
 
 {% endblock %}
