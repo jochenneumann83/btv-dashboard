@@ -90,7 +90,6 @@
 </div>
 
 <div id="share-staging-area" style="position: fixed; left: -9999px; top: 0; width: 500px; background-color: #1a1a1a; padding: 25px; border-radius: 12px; border: 2px solid #FFD700;">
-    
     <div class="mb-4 flex items-center gap-4 border-b border-gray-700 pb-4">
         <img src="{{ url_for('static', filename='background.png') }}" class="h-12 w-auto shadow-lg rounded-full bg-black/50 p-1" alt="BTV Logo">
         <div>
@@ -98,9 +97,7 @@
             <p class="text-btv-yellow text-xs uppercase tracking-[0.2em] mt-1">Birkesdorfer TV</p>
         </div>
     </div>
-
     <div id="share-content-target"></div>
-
     <div class="mt-5 pt-3 border-t border-gray-800 text-center">
         <p class="text-sm font-bold text-btv-yellow mb-1">#nurderbtv #zukunftbrauchtjugend</p>
         <p class="text-[0.7rem] text-gray-500 font-mono">@btv1864jugend</p>
@@ -126,47 +123,37 @@
             const target = document.getElementById('share-content-target');
             target.innerHTML = ''; 
             
-            // Team Name
             const teamHeader = document.createElement('h3');
             teamHeader.innerText = teamName;
             teamHeader.className = 'text-white font-black text-3xl mb-4 text-center tracking-tight border-b-2 border-btv-yellow/20 pb-2';
             target.appendChild(teamHeader);
 
-            // Clone
             const clone = contentToClone.cloneNode(true);
             
-            // --- FIX FÜR ABGESCHNITTENEN TEXT ---
-            // 1. Buttons entfernen
             clone.querySelectorAll('button, a, object').forEach(el => el.remove());
-            
-            // 2. 'truncate' entfernen, damit lange Namen umbrechen können
             clone.querySelectorAll('.truncate').forEach(el => el.classList.remove('truncate'));
-            
-            // 3. 'h-full' und andere einschränkende Klassen entfernen
             clone.classList.remove('h-full', 'flex-grow', 'bg-black/60', 'border-white/5');
-            
-            // 4. Neues Styling für das Bild
             clone.classList.add('bg-black/40', 'border', 'border-btv-yellow/20', 'p-6', 'rounded-xl');
             
-            // 5. Schriftgrößen im Klon anpassen (damit es auf dem Bild gut lesbar ist)
-            // Heim/Gast größer machen
             clone.querySelectorAll('.team-name-line').forEach(el => {
-                el.classList.replace('text-xs', 'text-lg'); // Größer
-                el.classList.add('leading-tight'); // Zeilenabstand anpassen
+                el.classList.replace('text-xs', 'text-lg');
+                el.classList.add('leading-tight');
             });
-            // Ergebnis riesig machen
-            const scoreEl = clone.querySelector('.text-4xl, .text-xl'); // Je nachdem was da ist
+
+            // HIER IST DIE ÄNDERUNG FÜR DAS GROSSE ERGEBNIS:
+            const scoreEl = clone.querySelector('.text-4xl, .text-xl'); 
             if(scoreEl) {
-                scoreEl.classList.replace('text-xl', 'text-5xl');
-                scoreEl.classList.add('py-4');
+                // Alte Größenklassen entfernen
+                scoreEl.classList.remove('text-xl', 'text-4xl');
+                // Neue RIESIGE Größe (text-7xl) hinzufügen
+                scoreEl.classList.add('text-7xl', 'py-6');
             }
 
             target.appendChild(clone);
 
-            // Screenshot erstellen
             const stagingArea = document.getElementById('share-staging-area');
             const canvas = await html2canvas(stagingArea, {
-                scale: 2.5, // Hohe Auflösung
+                scale: 2.5,
                 backgroundColor: '#1a1a1a',
                 useCORS: true, 
                 logging: false
