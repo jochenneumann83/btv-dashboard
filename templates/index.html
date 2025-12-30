@@ -127,7 +127,7 @@
             const target = document.getElementById('share-content-target');
             target.innerHTML = ''; 
             
-            // Header (Teamname) bauen
+            // Header (Teamname)
             const teamHeader = document.createElement('h3');
             teamHeader.innerText = teamName;
             teamHeader.className = 'text-white font-black text-3xl mb-4 text-center tracking-tight border-b-2 border-btv-yellow/20 pb-2';
@@ -136,11 +136,9 @@
             // Klonen
             const clone = contentToClone.cloneNode(true);
             
-            // Aufräumen (Buttons weg)
+            // Aufräumen
             clone.querySelectorAll('button, a, object').forEach(el => el.remove());
-            // Truncate weg
             clone.querySelectorAll('.truncate').forEach(el => el.classList.remove('truncate'));
-            // Styling anpassen
             clone.classList.remove('h-full', 'flex-grow', 'bg-black/60', 'border-white/5');
             clone.classList.add('bg-black/40', 'border', 'border-btv-yellow/20', 'p-6', 'rounded-xl');
             
@@ -150,19 +148,21 @@
                 el.classList.add('leading-tight');
             });
 
-            // --- ERGEBNIS ANPASSUNG ---
+            // --- SCORE ANPASSUNG ---
             const scoreEl = clone.querySelector('.js-score-text');
             if(scoreEl) {
-                // Etwas kleiner als vorher (5rem statt 6rem)
-                scoreEl.style.fontSize = '5rem'; 
+                // Schriftgröße etwas kleiner (4.5rem)
+                scoreEl.style.fontSize = '4.5rem'; 
                 scoreEl.style.lineHeight = '1';
                 
-                // UNGLEICHE ABSTÄNDE für optische Mitte:
-                // Mehr Abstand nach unten, damit die Auswärtsmannschaft weggedrückt wird
-                scoreEl.style.marginTop = '10px';
-                scoreEl.style.marginBottom = '30px'; 
-                scoreEl.style.padding = '0';
+                // VERSCHIEBUNG: Wir ziehen es nach oben und drücken es von unten weg
+                // Negativer Margin oben zieht das Element höher
+                scoreEl.style.marginTop = '-15px'; 
                 
+                // Großer Margin unten drückt die Gast-Mannschaft weg
+                scoreEl.style.marginBottom = '35px'; 
+                
+                scoreEl.style.padding = '0';
                 scoreEl.classList.remove('text-xl', 'py-1');
             }
 
