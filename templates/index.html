@@ -4,7 +4,7 @@
 
 <header class="mb-6 border-l-4 border-btv-yellow pl-4 flex justify-between items-end">
     <div>
-        <h1 id="page-title-for-share" class="text-3xl font-bold text-white uppercase tracking-tighter">Ergebnisse</h1>
+        <h1 class="text-3xl font-bold text-white uppercase tracking-tighter">Ergebnisse</h1>
         <p class="text-gray-400 text-sm">Aktueller Spieltag im Überblick</p>
     </div>
     <div class="text-[0.6rem] text-gray-600 font-mono">Live: 3 Min</div>
@@ -35,9 +35,9 @@
                     <div class="text-[0.6rem] text-gray-500 uppercase tracking-widest mb-1">Letztes Spiel</div>
                     
                     <div class="flex flex-col gap-1">
-                        <div class="text-xs {{ 'text-btv-yellow font-bold' if item.game.we_are_home else 'text-gray-400' }} truncate">{{ item.game.heim }}</div>
+                        <div class="text-xs {{ 'text-btv-yellow font-bold' if item.game.we_are_home else 'text-gray-400' }} truncate team-name-line">{{ item.game.heim }}</div>
                         <div class="text-center font-mono text-xl font-bold text-white py-1">{{ item.game.tore }}</div>
-                        <div class="text-xs text-right {{ 'text-btv-yellow font-bold' if not item.game.we_are_home else 'text-gray-400' }} truncate">{{ item.game.gast }}</div>
+                        <div class="text-xs text-right {{ 'text-btv-yellow font-bold' if not item.game.we_are_home else 'text-gray-400' }} truncate team-name-line">{{ item.game.gast }}</div>
                     </div>
                     
                     <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-800">
@@ -89,85 +89,104 @@
     {% endfor %}
 </div>
 
-
-<div id="share-staging-area" style="position: fixed; left: -9999px; top: 0; width: 400px; background-color: #1a1a1a; padding: 20px; border-radius: 12px; border: 2px solid #FFD700;">
-    <div class="mb-4 flex items-center gap-3 border-b border-gray-700 pb-3">
-        <div class="h-8 w-8 bg-btv-yellow rounded-full flex items-center justify-center font-bold text-black">BTV</div>
-        <h2 class="text-xl font-bold text-white uppercase tracking-tighter">Ergebnisdienst</h2>
+<div id="share-staging-area" style="position: fixed; left: -9999px; top: 0; width: 500px; background-color: #1a1a1a; padding: 25px; border-radius: 12px; border: 2px solid #FFD700;">
+    
+    <div class="mb-4 flex items-center gap-4 border-b border-gray-700 pb-4">
+        <img src="{{ url_for('static', filename='background.png') }}" class="h-12 w-auto shadow-lg rounded-full bg-black/50 p-1" alt="BTV Logo">
+        <div>
+            <h2 class="text-2xl font-bold text-white uppercase tracking-tighter leading-none">Ergebnisdienst</h2>
+            <p class="text-btv-yellow text-xs uppercase tracking-[0.2em] mt-1">Birkesdorfer TV</p>
+        </div>
     </div>
-    <div id="share-content-target"></div>
-    <div class="mt-3 text-center text-[0.6rem] text-gray-500 font-mono">birkesdorfer-tv.de</div>
-</div>
 
+    <div id="share-content-target"></div>
+
+    <div class="mt-5 pt-3 border-t border-gray-800 text-center">
+        <p class="text-sm font-bold text-btv-yellow mb-1">#nurderbtv #zukunftbrauchtjugend</p>
+        <p class="text-[0.7rem] text-gray-500 font-mono">@btv1864jugend</p>
+    </div>
+</div>
 
 <script>
     async function shareTileFn(button) {
-        // 1. Prüfen, ob der Browser Teilen unterstützt
         if (!navigator.share || !navigator.canShare) {
-            alert("Dein Browser unterstützt das native Teilen von Bildern leider nicht. Versuche es auf einem Smartphone.");
+            alert("Dein Browser unterstützt das Teilen nicht. Bitte Screenshot manuell erstellen.");
             return;
         }
 
         const btnOriginalText = button.innerHTML;
-        button.innerHTML = '<svg class="animate-spin h-3 w-3 text-btv-yellow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+        button.innerHTML = '<svg class="animate-spin h-3 w-3 text-btv-yellow" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
         button.disabled = true;
 
         try {
-            // 2. Die Kachel finden
             const tileWrapper = button.closest('.js-tile-to-share');
             const contentToClone = tileWrapper.querySelector('.tile-content-area');
             const teamName = tileWrapper.querySelector('h2').innerText;
 
-            // 3. Staging Area vorbereiten (Inhalt kopieren)
             const target = document.getElementById('share-content-target');
-            target.innerHTML = ''; // Leeren
+            target.innerHTML = ''; 
             
-            // Teamname als Überschrift hinzufügen
+            // Team Name
             const teamHeader = document.createElement('h3');
             teamHeader.innerText = teamName;
-            teamHeader.className = 'text-btv-yellow font-bold text-lg mb-2 text-center';
+            teamHeader.className = 'text-white font-black text-3xl mb-4 text-center tracking-tight border-b-2 border-btv-yellow/20 pb-2';
             target.appendChild(teamHeader);
 
-            // Klonen und einfügen
+            // Clone
             const clone = contentToClone.cloneNode(true);
-            // Buttons im Klon entfernen, die brauchen wir nicht auf dem Bild
-            const buttonsInClone = clone.querySelectorAll('button, a, object');
-            buttonsInClone.forEach(btn => btn.remove());
             
-            // Styling des Klons anpassen für das Bild
-            clone.classList.remove('bg-black/60', 'border-white/5');
-            clone.classList.add('bg-black/40', 'border-btv-yellow/20');
+            // --- FIX FÜR ABGESCHNITTENEN TEXT ---
+            // 1. Buttons entfernen
+            clone.querySelectorAll('button, a, object').forEach(el => el.remove());
+            
+            // 2. 'truncate' entfernen, damit lange Namen umbrechen können
+            clone.querySelectorAll('.truncate').forEach(el => el.classList.remove('truncate'));
+            
+            // 3. 'h-full' und andere einschränkende Klassen entfernen
+            clone.classList.remove('h-full', 'flex-grow', 'bg-black/60', 'border-white/5');
+            
+            // 4. Neues Styling für das Bild
+            clone.classList.add('bg-black/40', 'border', 'border-btv-yellow/20', 'p-6', 'rounded-xl');
+            
+            // 5. Schriftgrößen im Klon anpassen (damit es auf dem Bild gut lesbar ist)
+            // Heim/Gast größer machen
+            clone.querySelectorAll('.team-name-line').forEach(el => {
+                el.classList.replace('text-xs', 'text-lg'); // Größer
+                el.classList.add('leading-tight'); // Zeilenabstand anpassen
+            });
+            // Ergebnis riesig machen
+            const scoreEl = clone.querySelector('.text-4xl, .text-xl'); // Je nachdem was da ist
+            if(scoreEl) {
+                scoreEl.classList.replace('text-xl', 'text-5xl');
+                scoreEl.classList.add('py-4');
+            }
 
             target.appendChild(clone);
 
-            // 4. Screenshot machen mit html2canvas
+            // Screenshot erstellen
             const stagingArea = document.getElementById('share-staging-area');
             const canvas = await html2canvas(stagingArea, {
-                scale: 2, // Für scharfe Bilder auf Retina-Displays
-                backgroundColor: '#1a1a1a', // Hintergrundfarbe erzwingen
-                useCORS: true, // Wichtig, falls externe Bilder geladen werden
+                scale: 2.5, // Hohe Auflösung
+                backgroundColor: '#1a1a1a',
+                useCORS: true, 
                 logging: false
             });
 
-            // 5. Canvas in ein Bild-Datei (Blob) umwandeln
             canvas.toBlob(async (blob) => {
-                // 6. Über die Web Share API teilen
-                const file = new File([blob], `ergebnis-${teamName.replace(/\s+/g, '-').toLowerCase()}.png`, { type: 'image/png' });
-
+                const file = new File([blob], `btv-ergebnis-${teamName.trim()}.png`, { type: 'image/png' });
                 if (navigator.canShare({ files: [file] })) {
                     await navigator.share({
                         files: [file],
-                        title: 'Spielergebnis ' + teamName,
-                        text: `Das aktuelle Ergebnis der ${teamName}.`
+                        title: 'BTV Ergebnis: ' + teamName,
+                        text: `#nurderbtv - Ergebnis der ${teamName}`
                     });
                 }
             }, 'image/png');
 
         } catch (err) {
-            console.error("Fehler beim Teilen:", err);
-            alert("Es gab einen Fehler beim Erstellen des Bildes.");
+            console.error(err);
+            alert("Fehler beim Teilen.");
         } finally {
-             // Button zurücksetzen
              button.innerHTML = btnOriginalText;
              button.disabled = false;
         }
