@@ -108,7 +108,6 @@
 
 <script>
     async function shareTileFn(button) {
-        // Feature Check
         if (!navigator.share || !navigator.canShare) {
             alert("Dein Browser unterstützt das Teilen nicht. Bitte Screenshot manuell erstellen.");
             return;
@@ -139,32 +138,37 @@
             
             // Aufräumen (Buttons weg)
             clone.querySelectorAll('button, a, object').forEach(el => el.remove());
-            // Truncate weg (damit Text umbricht)
+            // Truncate weg
             clone.querySelectorAll('.truncate').forEach(el => el.classList.remove('truncate'));
-            // Hintergrund/Rahmen anpassen
+            // Styling anpassen
             clone.classList.remove('h-full', 'flex-grow', 'bg-black/60', 'border-white/5');
             clone.classList.add('bg-black/40', 'border', 'border-btv-yellow/20', 'p-6', 'rounded-xl');
             
-            // Team-Namen größer machen
+            // Team-Namen größer
             clone.querySelectorAll('.team-name-line').forEach(el => {
                 el.classList.replace('text-xs', 'text-lg');
                 el.classList.add('leading-tight');
             });
 
-            // SCORE GRÖSSER MACHEN
-            // Wir greifen das Element per Klasse und setzen den Style direkt per JS
+            // --- ERGEBNIS ANPASSUNG ---
             const scoreEl = clone.querySelector('.js-score-text');
             if(scoreEl) {
-                // Inline-Style gewinnt immer gegen CSS-Klassen
-                scoreEl.style.fontSize = '6rem'; // ca 96px
+                // Etwas kleiner als vorher (5rem statt 6rem)
+                scoreEl.style.fontSize = '5rem'; 
                 scoreEl.style.lineHeight = '1';
-                scoreEl.style.padding = '20px 0';
-                scoreEl.classList.remove('text-xl'); // Alte Klasse sicherheitshalber weg
+                
+                // UNGLEICHE ABSTÄNDE für optische Mitte:
+                // Mehr Abstand nach unten, damit die Auswärtsmannschaft weggedrückt wird
+                scoreEl.style.marginTop = '10px';
+                scoreEl.style.marginBottom = '30px'; 
+                scoreEl.style.padding = '0';
+                
+                scoreEl.classList.remove('text-xl', 'py-1');
             }
 
             target.appendChild(clone);
 
-            // Screenshot erstellen
+            // Screenshot
             const stagingArea = document.getElementById('share-staging-area');
             const canvas = await html2canvas(stagingArea, {
                 scale: 2.5,
