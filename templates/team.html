@@ -33,10 +33,10 @@
             </thead>
             <tbody class="text-sm divide-y divide-gray-800">
                 {% for row in league_table %}
-                <tr class="hover:bg-white/5 transition-colors {{ 'bg-white/10' if row.is_us else '' }}">
+                <tr class="hover:bg-white/5 transition-colors {{ 'bg-white/10' if row.is_own else '' }}">
                     <td class="p-3 text-center font-mono text-gray-500">{{ row.rang }}</td>
-                    <td class="p-3 font-medium {{ 'text-btv-yellow' if row.is_us else 'text-gray-200' }}">
-                        {{ row.team }}
+                    <td class="p-3 font-medium {{ 'text-btv-yellow' if row.is_own else 'text-gray-200' }}">
+                        {{ row.mannschaft }}
                     </td>
                     <td class="p-3 text-center text-gray-400">{{ row.spiele }}</td>
                     <td class="p-3 text-center text-gray-400">{{ row.s }}</td>
@@ -128,7 +128,6 @@
                     <th class="p-3 font-semibold text-right w-1/3">Heim</th>
                     <th class="p-3 font-semibold text-center w-16">Erg.</th>
                     <th class="p-3 font-semibold w-1/3">Gast</th>
-                    <th class="p-3 font-semibold text-center w-10"></th>
                 </tr>
             </thead>
             <tbody class="text-sm divide-y divide-gray-800">
@@ -142,15 +141,12 @@
                     </td>
                     
                     <td class="p-3 text-center font-bold text-gray-400 tracking-wider bg-black/10">
-                        {{ game.tore if ':' in game.tore else '-' }}
+                        {{ game.tore }}
                     </td>
 
                     <td class="p-3 font-medium text-gray-400 truncate max-w-[150px]">
                         {{ game.gast }}
                     </td>
-                    
-                    <td class="p-3 text-center">
-                        </td>
                 </tr>
                 {% endfor %}
             </tbody>
